@@ -1,134 +1,60 @@
-#averaging parameters and calculate bioclim
-#still to redundant, needs to be coded smarter
+### WorldClim data preparation for SDMs - present scenario
+### cropping averaging environmental parameters (temp, precip) and calculate bioclim
 
-#### averaging ####
-
-#preparations
 library(sf)
 sf_use_s2(FALSE)
 library(stars)
 library(tidyverse)
 
-wd <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/"
+# wd <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/"
+wd <- "/Volumes/projects/bioing/data/ArcticSDM/"
 
-## We only need tundra and taiga
+###################
+#### averaging ####
+###################
+
+## Spatial extent
 bbox <- st_read(glue::glue("{wd}data/Ecoregions/tnc_terr_ecoregions.shp")) %>%
   filter(WWF_MHTNAM%in%c("Boreal Forests/Taiga", "Tundra"), st_coordinates(st_centroid(.))[,2]>0)
 
-#### tmin ####
+#### files ####
+fls_path <- glue::glue("{wd}raw/present")
+fls      <- tibble(fls = list.files(fls_path,
+                         pattern = ".tif$",  
+                         recursive = TRUE)) %>%
+              mutate(type  = sapply(strsplit(fls, "_"), function(x) x[4]),
+                     year  = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 1, 4)),
+                     month = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 6, 7)))
+fls_out  <- glue::glue("{wd}environment/calibration/")
 
+
+##### monthly/overall mean #####
 {
-  fls_tmin <- list.files(glue::glue("{wd}raw/present/wc2.1_cruts4.06_2.5m_tmin_2010-2019"),
-                       pattern = ".tif$",  
-                       full.names = TRUE)
-
-fls_month  <- as.numeric(substr(sapply(strsplit(fls_tmin, "_"), function(x) x[length(x)]), 6, 7))
-
-##### monthly #####
-
-# calculate monthly
-tmin_stars_months <- lapply(unique(fls_month), function(x) {
-  read_stars(fls_tmin[fls_month==x]) %>% st_crop(bbox %>% st_bbox() %>% st_as_sfc(crs = 4326)) %>% 
-    merge() %>% st_apply(., 1:2, mean, future = T) %>% suppressMessages()
-})
-
-# export monthly
-write_stars(tmin_stars_months[[1]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months1.grd")
-write_stars(tmin_stars_months[[2]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months2.grd")
-write_stars(tmin_stars_months[[3]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months3.grd")
-write_stars(tmin_stars_months[[4]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months4.grd")
-write_stars(tmin_stars_months[[5]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months5.grd")
-write_stars(tmin_stars_months[[6]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months6.grd")
-write_stars(tmin_stars_months[[7]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months7.grd")
-write_stars(tmin_stars_months[[8]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months8.grd")
-write_stars(tmin_stars_months[[9]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months9.grd")
-write_stars(tmin_stars_months[[10]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months10.grd")
-write_stars(tmin_stars_months[[11]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months11.grd")
-write_stars(tmin_stars_months[[12]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_months12.grd")
-
-##### yearly #####
-tmin <- do.call("c", tmin_stars_months) %>% merge() %>% st_apply(., 1:2, mean, future = T) %>% setNames("tmin_2015")
-
-write_stars(tmin, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmin_2010_2019_mean3")
-
+  for(t in unique(fls$type)) {
+    
+    ### monthly
+    month_list <- (fls %>% filter(type == t) %>% group_split(month)) %>% parallel::mclapply(function(m) {
+      read_stars(glue::glue("{fls_path}/{m$fls}")) %>% st_crop(bbox %>% st_bbox() %>% st_as_sfc(crs = 4326)) %>% 
+        merge() %>% st_apply(., 1:2, mean, future = T) %>% setNames(t) %>% suppressMessages()
+    }, mc.cores = 12)
+    
+    names(month_list) <- glue::glue("wc2.1_2.5m_{t}_2015_{1:12}")
+    invisible(lapply(1:length(month_list), function(f) write_stars(month_list[[f]], glue::glue("{fls_out}monthly/{names(month_list)[f]}.tiff"))))
+    
+    ### annual
+    overall_mean <- do.call("c", month_list) %>% merge() %>% st_apply(., 1:2, mean, future = T) %>% setNames(t)
+    write_stars(month_list[[f]], glue::glue("{fls_out}wc2.1_2.5m_{t}_2015.tiff"))
+    
+  }
 }
 
-#### tmax ####
+##### bioclim variables #####
 
-{
-fls_tmax <- list.files(glue::glue("{wd}raw/present/wc2.1_cruts4.06_2.5m_tmax_2010-2019"),
-                       pattern = ".tif$",  
-                       full.names = TRUE)
 
-fls_month  <- as.numeric(substr(sapply(strsplit(fls_tmax, "_"), function(x) x[length(x)]), 6, 7))
 
-##### monthly #####
 
-# calculate monthly
-tmax_stars_months <- lapply(unique(fls_month), function(x) {
-  read_stars(fls_tmax[fls_month==x]) %>% st_crop(bbox %>% st_bbox() %>% st_as_sfc(crs = 4326)) %>% 
-    merge() %>% st_apply(., 1:2, mean, future = T) %>% suppressMessages()
-})
 
-# export monthly
-write_stars(tmax_stars_months[[1]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months1.grd")
-write_stars(tmax_stars_months[[2]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months2.grd")
-write_stars(tmax_stars_months[[3]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months3.grd")
-write_stars(tmax_stars_months[[4]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months4.grd")
-write_stars(tmax_stars_months[[5]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months5.grd")
-write_stars(tmax_stars_months[[6]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months6.grd")
-write_stars(tmax_stars_months[[7]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months7.grd")
-write_stars(tmax_stars_months[[8]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months8.grd")
-write_stars(tmax_stars_months[[9]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months9.grd")
-write_stars(tmax_stars_months[[10]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months10.grd")
-write_stars(tmax_stars_months[[11]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months11.grd")
-write_stars(tmax_stars_months[[12]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_months12.grd")
 
-##### yearly #####
-tmax <- do.call("c", tmax_stars_months) %>% merge() %>% st_apply(., 1:2, mean, future = T) %>% setNames("tmax_2015")
-
-write_stars(tmax, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/tmax_2010_2019_mean3")
-
-}
-
-#### prec ####
-
-{
-  
-fls_prec <- list.files(glue::glue("{wd}raw/present/wc2.1_cruts4.06_2.5m_prec_2010-2019"),
-                       pattern = ".tif$",  
-                       full.names = TRUE)
-
-fls_month  <- as.numeric(substr(sapply(strsplit(fls_prec, "_"), function(x) x[length(x)]), 6, 7))
-
-##### monthly #####
-
-# calculate monthly
-prec_stars_months <- lapply(unique(fls_month), function(x) {
-  read_stars(fls_prec[fls_month==x]) %>% st_crop(bbox %>% st_bbox() %>% st_as_sfc(crs = 4326)) %>% 
-    merge() %>% st_apply(., 1:2, mean, future = T) %>% suppressMessages()
-})
-
-# export monthly
-write_stars(prec_stars_months[[1]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months1.grd")
-write_stars(prec_stars_months[[2]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months2.grd")
-write_stars(prec_stars_months[[3]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months3.grd")
-write_stars(prec_stars_months[[4]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months4.grd")
-write_stars(prec_stars_months[[5]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months5.grd")
-write_stars(prec_stars_months[[6]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months6.grd")
-write_stars(prec_stars_months[[7]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months7.grd")
-write_stars(prec_stars_months[[8]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months8.grd")
-write_stars(prec_stars_months[[9]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months9.grd")
-write_stars(prec_stars_months[[10]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months10.grd")
-write_stars(prec_stars_months[[11]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months11.grd")
-write_stars(prec_stars_months[[12]], "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_months12.grd")
-
-##### yearly #####
-prec <- do.call("c", prec_stars_months) %>% merge() %>% st_apply(., 1:2, mean, future = T) %>% setNames("prec_2015")
-
-write_stars(prec, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/prec_2010_2019_mean3")
-
-}
 
 #### bioclim ####
 
