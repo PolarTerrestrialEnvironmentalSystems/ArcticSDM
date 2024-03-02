@@ -48,90 +48,114 @@ fls_out  <- glue::glue("{wd}environment/calibration/")
   }
 }
 
-##### bioclim variables #####
 
+###########################
+#### bioclim variables ####
+###########################
 
+test_bbox <- st_bbox(c(xmin = -142, xmax = -165, ymin = 54, ymax = 71), crs = 4326) %>% st_as_sfc()
 
-
-
-
-
-#### bioclim ####
+fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".tiff")) %>%
+                  mutate(type  = sapply(strsplit(fls, "_"), function(x) x[[3]]),
+                         month = as.numeric(sapply(strsplit(fls, "_"), function(x) gsub(".tiff", "", x[[5]])))) %>%
+                  arrange(type, month)
 
 {
-library(raster)
-
-##### prepare tmin #####
-tmin1 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months1.grd")
-tmin2 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months2.grd")
-tmin3 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months3.grd")
-tmin4 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months4.grd")
-tmin5 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months5.grd")
-tmin6 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months6.grd")
-tmin7 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months7.grd")
-tmin8 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months8.grd")
-tmin9 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months9.grd")
-tmin10 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months10.grd")
-tmin11 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months11.grd")
-tmin12 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmin_2010_2019_months12.grd")
-
-
-tmin2015 = stack(tmin1, tmin2, tmin3, tmin4, tmin5, tmin6, tmin7, tmin8, tmin9, 
-                  tmin10, tmin11, tmin12)
-
-month <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-names(tmin2015) <- month
-
-##### prepare tmax #####
-tmax1 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months1.grd")
-tmax2 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months2.grd")
-tmax3 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months3.grd")
-tmax4 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months4.grd")
-tmax5 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months5.grd")
-tmax6 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months6.grd")
-tmax7 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months7.grd")
-tmax8 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months8.grd")
-tmax9 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months9.grd")
-tmax10 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months10.grd")
-tmax11 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months11.grd")
-tmax12 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/tmax_2010_2019_months12.grd")
-
-
-tmax2015 = stack(tmax1, tmax2, tmax3, tmax4, tmax5, tmax6, tmax7, tmax8, tmax9, 
-                 tmax10, tmax11, tmax12)
-
-month <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-names(tmax2015) <- month
-
-##### prepare prec #####
-prec1 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months1.grd")
-prec2 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months2.grd")
-prec3 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months3.grd")
-prec4 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months4.grd")
-prec5 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months5.grd")
-prec6 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months6.grd")
-prec7 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months7.grd")
-prec8 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months8.grd")
-prec9 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months9.grd")
-prec10 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months10.grd")
-prec11 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months11.grd")
-prec12 = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/base2015/prec_2010_2019_months12.grd")
-
-
-prec2015 = stack(prec1, prec2, prec3, prec4, prec5, prec6, prec7, prec8, prec9, 
-                 prec10, prec11, prec12)
-
-month <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-names(prec2015) <- month
-
-##### calculate #####
-library(dismo)
-
-bio2015 = biovars(prec = prec2015, tmin = tmin2015, tmax = tmax2015)
-
-writeRaster(bio2015, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/environment/server2015/bio2015.grd")
-
+  
+  prec_tmin_tmax <- lapply(unique(fls_tif$type), function(t) {
+    read_stars(glue::glue("{fls_out}monthly/{fls_tif %>% filter(type == t) %>% pull(fls)}")) %>%
+      st_crop(test_bbox) %>% merge()
+  }) %>% setNames(c("prec", "tmin", "tmax"))
+  
+  {        
+    ## tavg
+    tavg_months <- lapply(1:12, function(x) {
+      (((prec_tmin_tmax$tmin[,,,x]) + (prec_tmin_tmax$tmax[,,,x])) /2) %>% adrop()
+    }) %>% do.call("c", .) %>% merge()
+    
+    # P1. Annual Mean Temperature 
+    p1 <- tavg_months %>% st_apply(., 1:2, mean) %>% setNames("p1")
+    
+    # P2. Mean Diurnal Range(Mean(period max-min))
+    p2 <- lapply(1:12, function(x) {
+      (((prec_tmin_tmax$tmin[,,,x]) - (prec_tmin_tmax$tmax[,,,x]))) %>% adrop()
+    }) %>% do.call("c", .) %>% merge() %>% st_apply(., 1:2, mean) %>% setNames("p2")
+    
+    # P4. Temperature Seasonality (standard deviation) 
+    p4 <- (tavg_months %>% st_apply(., 1:2, sd) * 100) %>% setNames("p4")
+    
+    # P5. Max Temperature of Warmest Period 
+    p5 <- st_apply(prec_tmin_tmax$tmax, 1:2, max) %>% setNames("p5")
+    
+    # P6. Min Temperature of Coldest Period 
+    p6 <- st_apply(prec_tmin_tmax$tmin, 1:2, min)  %>% setNames("p6")
+    
+    # P7. Temperature Annual Range (P5-P6) 
+    p7 <- (p5 - p6) %>% setNames("p7")
+    
+    # P3. Isothermality (P2 / P7) 
+    p3 <- ((p2 / p7) * 100) %>% setNames("p3")
+    
+    # P12. Annual Precipitation 
+    p12 <- st_apply(prec_tmin_tmax$prec, 1:2, sum) %>% setNames("p12")
+    
+    # P13. Precipitation of Wettest Period 
+    p13 <- st_apply(prec_tmin_tmax$prec, 1:2, max) %>% setNames("p13")
+    
+    # P14. Precipitation of Driest Period 
+    p14 <- st_apply(prec_tmin_tmax$prec, 1:2, min) %>% setNames("p14")
+    
+    # P15. Precipitation Seasonality(Coefficient of Variation) 
+    # the "1 +" is to avoid strange CVs for areas where mean rainfaill is < 1)
+    p15 <- st_apply(prec_tmin_tmax$prec+1, 1:2, cv) %>% setNames("p14")
+  
+    # precip by quarter (3 months)		
+    wet <- lapply(list(1:3, 4:6, 7:9, 10:12), function(x) {
+      prec_tmin_tmax$prec[,,,x] %>% st_apply(., 1:2, sum)
+    }) %>% do.call('c', .) %>% merge()
+      
+    # P16. Precipitation of Wettest Quarter 
+    p16 <- st_apply(wet, 1:2, max) %>% setNames("p16")
+    
+    # P17. Precipitation of Driest Quarter 
+    p17 <- st_apply(wet, 1:2, min) %>% setNames("p17")
+    
+    tmp <- lapply(list(1:3, 4:6, 7:9, 10:12), function(x) {
+      ((tavg_months[,,,x] %>% st_apply(., 1:2, sum))/3)
+    }) %>% do.call('c', .) %>% merge()
+    
+    # P8. Mean Temperature of Wettest Quarter
+    p8 <- st_apply(c(tmp[,,,1] %>% adrop(), tmp[,,,2] %>% adrop(), tmp[,,,3] %>% adrop(), tmp[,,,4] %>% adrop(),
+        st_apply(wet, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
+        1:2, function(x) x[x[5]]) %>% setNames("p8")
+    
+    # P9. Mean Temperature of Driest Quarter  
+    p9 <- st_apply(c(tmp[,,,1] %>% adrop(), tmp[,,,2] %>% adrop(), tmp[,,,3] %>% adrop(), tmp[,,,4] %>% adrop(),
+                     st_apply(wet, 1:2, function(x) ifelse(all(!is.na(x)), which.min(x), NA))) %>% merge(),
+                   1:2, function(x) x[x[5]]) %>% setNames("p9")
+    
+    # P10 Mean Temperature of Warmest Quarter 
+    p10 <- st_apply(tmp, 1:2, max) %>% setNames("p10")
+    
+    # P11 Mean Temperature of Coldest Quarter
+    p11 <- st_apply(tmp, 1:2, min) %>% setNames("p11")
+    
+    # P18. Precipitation of Warmest Quarter 
+    p18 <- st_apply(c(wet[,,,1] %>% adrop(), wet[,,,2] %>% adrop(), wet[,,,3] %>% adrop(), wet[,,,4] %>% adrop(),
+                     st_apply(tmp, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
+                    1:2, function(x) x[x[5]]) %>% setNames("p18")
+    
+    # P19. Precipitation of Coldest Quarter 
+    p19 <- st_apply(c(wet[,,,1] %>% adrop(), wet[,,,2] %>% adrop(), wet[,,,3] %>% adrop(), wet[,,,4] %>% adrop(),
+                      st_apply(tmp, 1:2, function(x) ifelse(all(!is.na(x)), which.min(x), NA))) %>% merge(),
+                    1:2, function(x) x[x[5]]) %>% setNames("p19")
+    
+  
+   biovar <- c(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10,
+     p11, p12, p13, p14, p15, p16, p17, p18, p19) %>% merge() %>% setNames("biovar")
+   
+   
+   write_stars(biovar, glue::glue("{fls_out}wc2.1_2.5m_biovar_2015.tiff"))
+  }
+  
 }
