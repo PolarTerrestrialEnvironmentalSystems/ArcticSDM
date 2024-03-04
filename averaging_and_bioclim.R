@@ -4,10 +4,12 @@
 library(sf)
 sf_use_s2(FALSE)
 library(stars)
-library(tidyverse)
+library(tibble)
+library(dplyr)
 
 # wd <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/"
-wd <- "/Volumes/projects/bioing/data/ArcticSDM/"
+# wd <- "/Volumes/projects/bioing/data/ArcticSDM/"
+wd <- '/bioing/data/ArcticSDM/'
 
 ###################
 #### averaging ####
@@ -20,15 +22,19 @@ bbox <- st_read(glue::glue("{wd}data/Ecoregions/tnc_terr_ecoregions.shp")) %>%
 #### files ####
 fls_path <- glue::glue("{wd}raw/present")
 fls      <- tibble(fls = list.files(fls_path,
-                         pattern = ".tif$",  
-                         recursive = TRUE)) %>%
-              mutate(type  = sapply(strsplit(fls, "_"), function(x) x[4]),
-                     year  = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 1, 4)),
-                     month = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 6, 7)))
+                                    pattern = ".tif$",  
+                                    recursive = TRUE)) %>%
+  mutate(type  = sapply(strsplit(fls, "_"), function(x) x[4]),
+         year  = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 1, 4)),
+         month = as.numeric(substr(sapply(strsplit(fls, "_"), function(x) x[length(x)]), 6, 7)))
 fls_out  <- glue::glue("{wd}environment/calibration/")
 
 
-##### monthly/overall mean #####
+
+##############################
+#### monthly/overall mean ####
+##############################
+
 {
   for(t in unique(fls$type)) {
     
@@ -53,18 +59,18 @@ fls_out  <- glue::glue("{wd}environment/calibration/")
 #### bioclim variables ####
 ###########################
 
-test_bbox <- st_bbox(c(xmin = -142, xmax = -165, ymin = 54, ymax = 71), crs = 4326) %>% st_as_sfc()
+# test_bbox <- st_bbox(c(xmin = -142, xmax = -165, ymin = 54, ymax = 71), crs = 4326) %>% st_as_sfc()
 
 fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".tiff")) %>%
-                  mutate(type  = sapply(strsplit(fls, "_"), function(x) x[[3]]),
-                         month = as.numeric(sapply(strsplit(fls, "_"), function(x) gsub(".tiff", "", x[[5]])))) %>%
-                  arrange(type, month)
+  mutate(type  = sapply(strsplit(fls, "_"), function(x) x[[3]]),
+         month = as.numeric(sapply(strsplit(fls, "_"), function(x) gsub(".tiff", "", x[[5]])))) %>%
+  arrange(type, month)
 
 {
   
   prec_tmin_tmax <- lapply(unique(fls_tif$type), function(t) {
     read_stars(glue::glue("{fls_out}monthly/{fls_tif %>% filter(type == t) %>% pull(fls)}")) %>%
-      st_crop(test_bbox) %>% merge()
+      merge()
   }) %>% setNames(c("prec", "tmin", "tmax"))
   
   {        
@@ -107,13 +113,13 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     
     # P15. Precipitation Seasonality(Coefficient of Variation) 
     # the "1 +" is to avoid strange CVs for areas where mean rainfaill is < 1)
-    p15 <- st_apply(prec_tmin_tmax$prec+1, 1:2, cv) %>% setNames("p14")
-  
+    p15 <- st_apply(prec_tmin_tmax$prec+1, 1:2, raster::cv) %>% setNames("p14")
+    
     # precip by quarter (3 months)		
     wet <- lapply(list(1:3, 4:6, 7:9, 10:12), function(x) {
       prec_tmin_tmax$prec[,,,x] %>% st_apply(., 1:2, sum)
     }) %>% do.call('c', .) %>% merge()
-      
+    
     # P16. Precipitation of Wettest Quarter 
     p16 <- st_apply(wet, 1:2, max) %>% setNames("p16")
     
@@ -124,10 +130,10 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
       ((tavg_months[,,,x] %>% st_apply(., 1:2, sum))/3)
     }) %>% do.call('c', .) %>% merge()
     
-    # P8. Mean Temperature of Wettest Quarter
+    # P8. Mean Temperature of Wettest Quartera
     p8 <- st_apply(c(tmp[,,,1] %>% adrop(), tmp[,,,2] %>% adrop(), tmp[,,,3] %>% adrop(), tmp[,,,4] %>% adrop(),
-        st_apply(wet, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
-        1:2, function(x) x[x[5]]) %>% setNames("p8")
+                     st_apply(wet, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
+                   1:2, function(x) x[x[5]]) %>% setNames("p8")
     
     # P9. Mean Temperature of Driest Quarter  
     p9 <- st_apply(c(tmp[,,,1] %>% adrop(), tmp[,,,2] %>% adrop(), tmp[,,,3] %>% adrop(), tmp[,,,4] %>% adrop(),
@@ -142,7 +148,7 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     
     # P18. Precipitation of Warmest Quarter 
     p18 <- st_apply(c(wet[,,,1] %>% adrop(), wet[,,,2] %>% adrop(), wet[,,,3] %>% adrop(), wet[,,,4] %>% adrop(),
-                     st_apply(tmp, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
+                      st_apply(tmp, 1:2, function(x) ifelse(all(!is.na(x)), which.max(x), NA))) %>% merge(),
                     1:2, function(x) x[x[5]]) %>% setNames("p18")
     
     # P19. Precipitation of Coldest Quarter 
@@ -150,12 +156,12 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
                       st_apply(tmp, 1:2, function(x) ifelse(all(!is.na(x)), which.min(x), NA))) %>% merge(),
                     1:2, function(x) x[x[5]]) %>% setNames("p19")
     
-  
-   biovar <- c(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10,
-     p11, p12, p13, p14, p15, p16, p17, p18, p19) %>% merge() %>% setNames("biovar")
-   
-   
-   write_stars(biovar, glue::glue("{fls_out}wc2.1_2.5m_biovar_2015.tiff"))
+    
+    biovar <- c(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10,
+                p11, p12, p13, p14, p15, p16, p17, p18, p19) %>% merge() %>% setNames("biovar")
+    
+    
+    write_stars(biovar, glue::glue("{fls_out}wc2.1_2.5m_biovar_2015.tiff"))
   }
   
-}
+  }
