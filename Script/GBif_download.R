@@ -4,33 +4,50 @@ library(sf)
 sf_use_s2(FALSE)
 library(tidyverse)
 
+# wd <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/"
+wd <- "/Volumes/projects/bioing/data/ArcticSDM/"
+# wd <- '/bioing/data/ArcticSDM/'
+
 ## Spatial extent
-ecoreg <- st_read(glue::glue("/Users/slisovsk/Google Drive/My Drive/GeoDat/Ecoregions/tnc_terr_ecoregions.shp")) %>%
+ecoreg <- st_read(glue::glue("{wd}data/Ecoregions/tnc_terr_ecoregions.shp")) %>%
   filter(WWF_MHTNAM%in%c("Boreal Forests/Taiga", "Tundra"), st_coordinates(st_centroid(.))[,2]>0)
 
-tmp_folder <- dir.create("")
-save_dir   <- ""
+bbox_grid <- ecoreg %>% st_bbox(crs = 4326) %>% st_as_sfc() %>%
+  st_make_grid(n = c(40, 20)) %>% st_sf() %>% filter(apply(st_intersects(., ecoreg, sparse = FALSE), 1, any)) %>%
+  mutate(grid_id = 1:nrow(.)) %>% dplyr::select(grid_id)
 
-for(i in 1:nrow(ecoreg)) {
+st_write(bbox_grid, glue::glue("{wd}Data/occurance_grid.shp"))
+
+ggplot() +
+  geom_sf(data = ecoreg %>% dplyr::select('ECO_ID_U')) +
+  geom_sf(data = bbox_grid, fill = NA)
+
+
+tmp_folder <- dir.create(glue::glue("{wd}tmp"))
+save_dir   <- glue::glue("{wd}data/GBIF")
+
+for(i in 1:nrow(bbox_grid)) {
   
-  if(!file.exists(glue::glue("/Users/slisovsk/Desktop/{ecoreg[i,] %>% pull('ECO_ID_U')}_gbif_all.csv"))) {
-    large_wkt <- ecoreg[i,] %>% 
-      st_bbox() %>% st_as_sfc(crs = 4326) %>%
-      sf::st_as_text()
+  if(!file.exists(glue::glue("{save_dir}/{bbox_grid[i,] %>% pull('grid_id')}_gbif_all.csv"))) {
     
-    file_list <- occ_download(pred_within(large_wkt),format = "SIMPLE_CSV")
+    poly <- ecoreg %>% 
+      st_intersection(bbox_grid[i,]) %>% st_geometry() %>% st_union()
+    
+    bbox <- poly %>% st_bbox(crs = 4326) %>% st_as_sfc() %>% sf::st_as_text()
+    
+    file_list <- occ_download(pred_within(bbox),format = "SIMPLE_CSV")
     occ_download_wait(file_list[1])
     
     dwnl <- occ_download_get(file_list[1], overwrite = T) %>%
-      occ_download_import(path = tmp_folder)
+      occ_download_import()
     
-    inPoly <- dwnl %>% st_as_sf(coords = c('decimalLongitude', 'decimalLatitude'), crs = 4326) %>%
-      st_intersection(., ecoreg[i,] %>% st_geometry()) %>% 
-      suppressMessages() %>% suppressWarnings()
+    inPoly <- dwnl[c(dwnl %>% st_as_sf(coords = c('decimalLongitude', 'decimalLatitude'), crs = 4326) %>%
+                          st_geometry() %>% st_intersects(., poly, sparse = FALSE)),]
 
-    write_csv(inPoly %>% st_drop_geometry(), 
-              file = glue::glue("/Users/slisovsk/Desktop/{ecoreg[i,] %>% pull('ECO_ID_U')}_gbif_all.csv"))
+    write_csv(inPoly, 
+              file = glue::glue("{save_dir}/{bbox_grid[i,] %>% pull('grid_id')}_gbif_all.csv"))
+    
+    unlink(list.files(pattern = ".zip", full.names = T))
   }
-
+  
 }
-
