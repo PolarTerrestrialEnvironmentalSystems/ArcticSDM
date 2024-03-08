@@ -18,7 +18,7 @@ testbackg <- readRDS("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/test/t
 # p <- predict(predictors, m1)
 # plot(p)
 
-#### 2 model with evaluation ####
+#### model with evaluation ####
 
 gm1 <- glm(pa ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17,
            family = binomial(link = "logit"), data=envtrain)
