@@ -9,7 +9,7 @@ library(dplyr)
 
 # wd <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/"
 # wd <- "/Volumes/projects/bioing/data/ArcticSDM/"
-wd <- '/bioing/data/ArcticSDM/'
+  wd <- '/bioing/data/ArcticSDM/'
 
 ###################
 #### averaging ####
@@ -59,12 +59,33 @@ fls_out  <- glue::glue("{wd}environment/calibration/")
 #### bioclim variables ####
 ###########################
 
-# test_bbox <- st_bbox(c(xmin = -142, xmax = -165, ymin = 54, ymax = 71), crs = 4326) %>% st_as_sfc()
+test_bbox <- st_point(c(-151.3, 65.5)) %>% st_sfc(crs = 4326) %>% st_buffer(2) %>% st_bbox() %>% st_as_sfc(crs = 4326)
 
 fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".tiff")) %>%
   mutate(type  = sapply(strsplit(fls, "_"), function(x) x[[3]]),
          month = as.numeric(sapply(strsplit(fls, "_"), function(x) gsub(".tiff", "", x[[5]])))) %>%
   arrange(type, month)
+
+
+### test
+prec_tmin_tmax <- lapply(unique(fls_tif$type), function(t) {
+  read_stars(glue::glue("{fls_out}monthly/{fls_tif %>% filter(type == t) %>% pull(fls)}")) %>%
+    merge() %>% st_crop(test_bbox)
+}) %>% setNames(c("prec", "tmin", "tmax"))
+
+
+library(dismo)
+
+prec_mat <- as(prec_tmin_tmax[[1]], "Raster")
+tmax_mat <- as(prec_tmin_tmax[[2]], "Raster")
+tmin_mat <- as(prec_tmin_tmax[[3]], "Raster")
+
+bioc <- biovars(prec_mat, tmax_mat, tmin_mat)
+
+opar <- par(mfrow = c(1,2))
+plot(bioc[[17]])
+plot(as(p17, "Raster"))
+par(opar)
 
 {
   
@@ -74,6 +95,18 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
   }) %>% setNames(c("prec", "tmin", "tmax"))
   
   {        
+    
+    
+    window <- function(x)  { 
+      lng <- length(x)
+      x <- c(x,  x[1:3])
+      m <- matrix(ncol=3, nrow=lng)
+      for (i in 1:3) { m[,i] <- x[i:(lng+i-1)] }
+      apply(m, MARGIN=1, FUN=sum)
+    }
+    
+    
+    
     ## tavg
     tavg_months <- lapply(1:12, function(x) {
       (((prec_tmin_tmax$tmin[,,,x]) + (prec_tmin_tmax$tmax[,,,x])) /2) %>% adrop()
@@ -84,7 +117,7 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     
     # P2. Mean Diurnal Range(Mean(period max-min))
     p2 <- lapply(1:12, function(x) {
-      (((prec_tmin_tmax$tmin[,,,x]) - (prec_tmin_tmax$tmax[,,,x]))) %>% adrop()
+      (((prec_tmin_tmax$tmax[,,,x]) - (prec_tmin_tmax$tmin[,,,x]))) %>% adrop()
     }) %>% do.call("c", .) %>% merge() %>% st_apply(., 1:2, mean) %>% setNames("p2")
     
     # P4. Temperature Seasonality (standard deviation) 
@@ -100,7 +133,7 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     p7 <- (p5 - p6) %>% setNames("p7")
     
     # P3. Isothermality (P2 / P7) 
-    p3 <- ((p2 / p7) * 100) %>% setNames("p3")
+    p3 <- (100 * p2 / p7) %>% setNames("p3")
     
     # P12. Annual Precipitation 
     p12 <- st_apply(prec_tmin_tmax$prec, 1:2, sum) %>% setNames("p12")
@@ -113,7 +146,7 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     
     # P15. Precipitation Seasonality(Coefficient of Variation) 
     # the "1 +" is to avoid strange CVs for areas where mean rainfaill is < 1)
-    p15 <- st_apply(prec_tmin_tmax$prec+1, 1:2, raster::cv) %>% setNames("p14")
+    p15 <- st_apply(prec_tmin_tmax$prec+1, 1:2, raster::cv) %>% setNames("p15")
     
     # precip by quarter (3 months)		
     wet <- lapply(list(1:3, 4:6, 7:9, 10:12), function(x) {
@@ -125,6 +158,7 @@ fls_tif <- tibble(fls = list.files(glue::glue("{fls_out}monthly"), pattern = ".t
     
     # P17. Precipitation of Driest Quarter 
     p17 <- st_apply(wet, 1:2, min) %>% setNames("p17")
+    
     
     tmp <- lapply(list(1:3, 4:6, 7:9, 10:12), function(x) {
       ((tavg_months[,,,x] %>% st_apply(., 1:2, sum))/3)
