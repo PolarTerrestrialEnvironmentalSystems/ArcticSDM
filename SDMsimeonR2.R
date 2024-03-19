@@ -193,7 +193,6 @@ args_list <- c('responsecurves=TRUE',
                'hinge=TRUE')
                #paste0('betamultiplier=', rm))
 
-#need to generate and look at input data to adjust correctly
 maxent_mod <- maxent(x=mod_tab[-1] , p=mod_tab$p, a=NULL, removeDuplicates=TRUE, nbg=10000,
              path=wd, args=args_list)
 
@@ -218,26 +217,26 @@ pred_pts     <- parallel::mclapply(env_out_list, function(x) {
   } else st_extract(st, pts) %>% st_as_sf() %>% st_drop_geometry()
 }) %>% Reduce("cbind",.) %>% setNames(names(env_stars))
 
-#predict
+##### predict ####
 pred_stars_glm <- grd_out
 pred_stars_glm$grd_map[!is.na(pred_stars_glm$grd_map)]  <- predict(glm_mod, newdata = pred_pts)
 pred_glm <- st_as_stars(pred_stars_glm$grd_map)
-write_stars(pred_glm, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
+#write_stars(pred_glm, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
 
 pred_stars_gam <- grd_out
 pred_stars_gam$grd_map[!is.na(pred_stars_gam$grd_map)]  <- predict(gam_mod, newdata = pred_pts)
 pred_gam <- st_as_stars(pred_stars_gam$grd_map)
-write_stars(pred_gam, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
+#write_stars(pred_gam, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
 
 pred_stars_mars <- grd_out
 pred_stars_mars$grd_map[!is.na(pred_stars_mars$grd_map)]  <- predict(mars_mod, newdata = pred_pts)
 pred_mars <- st_as_stars(pred_stars_mars$grd_map)
-write_stars(pred_mars, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
+#write_stars(pred_mars, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
 
 pred_stars_maxent <- grd_out
 pred_stars_maxent$grd_map[!is.na(pred_stars_maxent$grd_map)]  <- predict(maxent_mod, pred_pts) 
 pred_maxent <- st_as_stars(pred_stars_maxent$grd_map)
-write_stars(pred_maxent, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
+#write_stars(pred_maxent, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
 
 
 
@@ -245,61 +244,85 @@ write_stars(pred_maxent, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/pr
 
 ##### Ensemble model #####
 #predictions
-pred_glm2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
-pred_gam2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
+library(stars)
+#with raster
+library(raster)
+pred_glm2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
+pred_gam2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
+pred_mars2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
+pred_maxent2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
 
+plot(pred_glm2r)
+plot(pred_gam2r)
+plot(pred_mars2r)
+plot(pred_maxent2r)
+
+models = stack(pred_glm2r, pred_gam2r, pred_mars2r, pred_maxent2r)
+names(models) <- c("glm", "gam", "mars", "maxent")
+mean_mod = mean(models)
+plot(mean_mod)
+
+
+#with stars: 8 approaches which did not work
+
+#0
+mean_mod_st = st_as_stars(mean_mod)
+
+ggplot() +
+  geom_stars(data = mean_mod_st$layer) +
+  scale_fill_viridis_c(na.value = NA, name = "Probability") +
+  geom_sf(data = map, fill = NA, linewidth = 0.6) +
+  theme_void()
+
+pred_glm2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
+pred_gam2= read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
+pred_mars2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
+pred_maxent2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
+
+#1
+modelss = stack(pred_glm2, pred_gam2)
+mean_mods = mean(modelss)
+
+#2
+mod <- st_apply(c(pred_glm2, pred_glm2), 1:2, mean)
+#result is a list with 4 lists, only want one
+mod <- st_apply(pred_glm2, pred_glm2, 1:2, mean)
+mod <- st_apply(c(pred_glm2$pred_glm.tiff, pred_glm2$pred_glm.tiff), 1:2, mean)
+
+#3
+unnamed.list <- list(pred_glm2, pred_gam2)
+
+names(unnamed.list) <- c("glm", "gam")
+stack(unnamed.list$glm, unnamed.list$glm, drop=FALSE)
+
+
+#4
+mean_m <- calc(unnamed.list, mean)
+mean_m <- calc(unlist(unnamed.list), mean)
+
+#5
+my_stars_object <- st_as_stars(unnamed.list)
+models <- c.stars(my_stars_object$glm, my_stars_object$gam)
+
+#6
+my_stars_object$mean <- st_apply(my_stars_object, 1:2, mean)
+my_stars_object$mean <- st_apply(my_stars_object$glm, my_stars_object$gam, 1:2, mean)
+my_stars_object$mean <- st_apply(c(my_stars_object$glm, my_stars_object$gam), 1:2, mean)
+#result is a list with 4 lists, only want one
+
+#7
+  # Define a function to calculate the mean for each cell
+  mean_function <- function(x) {
+    mean_value <- mean(x, na.rm = TRUE)  # Calculate mean, excluding NA values
+    return(mean_value)
+  }
+
+mean_grid <- st_apply(my_stars_object, mean_function)
+
+#8
 clusters_ndvi <- aggregate(pred_glm2, pred_gam2, FUN = mean, na.rm = TRUE)
 
 clusters_ndvi_sf <- st_as_sf(clusters_ndvi) %>%
   rename(ndvi = "raster_normalitzat.tiff.V1") %>%
   select(ndvi, geometry)
 
-
-stack(pred_glm2, pred_gam2)
-models <- c.stars(my_stars_object$glm, my_stars_object$gam)
-                
-                
-unnamed.list <- list(pred_stars_glm$grd_map, pred_stars_glm$grd_map, 
-                     pred_stars_mars$grd_map, pred_stars_maxent$grd_map)
-
-names(unnamed.list) <- c("glm", "gam", "mars", "maxent")
-stack(unnamed.list$glm, unnamed.list$glm, drop=FALSE)
-
-
-#overall_mean <- do.call("c", unnamed.list) %>% merge(unnamed.list) %>% 
-  
-y <- unlist(unnamed.list)
-
-my_stars_object$mean <- st_apply(my_stars_object, 1:2, mean)
-
-mod <- st_apply(c(pred_glm2$pred_glm.tiff, pred_gam2$pred_gam.tiff), 1:2, mean)
-
-mean_mod$
-dim(my_stars_object)
-library(raster)
-mean_m <- calc(unnamed.list, mean)
-
-mean_mod <- st_apply(c(pred_stars_glm$grd_map, pred_stars_gam$grd_map, 
-            pred_stars_mars$grd_map, pred_stars_maxent$grd_map), 
-         1:2, mean)
-
-# Define a function to calculate the mean for each cell
-mean_function <- function(x) {
-  mean_value <- mean(x, na.rm = TRUE)  # Calculate mean, excluding NA values
-  return(mean_value)
-}
-
-my_stars_object <- st_as_stars(unnamed.list)
-mean_grid <- st_apply(m_mod, mean_function)
-
-names(models) <- c("glm", "gam", "mars", "maxent")
-ensemble <- mean(models)
-plot(ensemble)
-
-#plot
-ggplot() +
-  geom_stars(data = mean_mod) +
-  scale_fill_viridis_c(na.value = NA, name = "Probability") +
-  geom_sf(data = map, fill = NA, linewidth = 0.6) +
-  theme_void()
-  
