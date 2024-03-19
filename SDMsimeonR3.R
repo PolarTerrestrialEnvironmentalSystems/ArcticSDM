@@ -253,7 +253,7 @@ pred_gam2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/predict
 pred_mars2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
 pred_maxent2r = raster("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
 
-plot(pred_glm2r)
+plot(pred_glm2)
 plot(pred_gam2r)
 plot(pred_mars2r)
 plot(pred_maxent2r)
@@ -266,85 +266,21 @@ plot(mean_mod)
 
 ###### with stars: 8 approaches which did not work #####
 
-#0
-mean_mod_st = st_as_stars(mean_mod)
-
 ggplot() +
-  geom_stars(data = mean_mod$layer) +
+  geom_stars(data = tt) +
   scale_fill_viridis_c(na.value = NA, name = "Probability") +
   geom_sf(data = map, fill = NA, linewidth = 0.6) +
   theme_void()
-#doesnt work
 
-#01
 fls_path = "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/"
 
-fls      <- tibble(fls = list.files(fls_path,
-                                    pattern = ".tiff$",  
-                                    recursive = TRUE))
+fls      <- list.files(fls_path, pattern = ".tiff$",  
+                         recursive = TRUE, full.names = T)
 
-for(t in fls){
-  model_list <- read_stars(glue::glue("{fls_path}/{t}"))}
+tt <- read_stars(fls) %>% merge() %>% st_apply(., 1:2, median, future = T)
+plot(tt)
 
-for(t in fls){
-    model_mean <- read_stars(glue::glue("{fls_path}/{t}")) %>%
-        merge() %>% st_apply(., 1:2, mean, future = T)} 
-
-plot(model_list$mean)
-
-model_st <- st_as_stars(mean_mod$layer)
-#ggplot does not work either
-    
-pred_glm2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_glm.tiff")
-pred_gam2= read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_gam.tiff")
-pred_mars2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_mars.tiff")
-pred_maxent2 = read_stars("//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/pred_maxent.tiff")
-
-#1
-modelss = stack(pred_glm2, pred_gam2)
-modelss = c(pred_glm2, pred_gam2)
-mean_mods = mean(modelss)
-
-#2
-mod <- st_apply(c(pred_glm2, pred_glm2), 1:2, mean)
-#result is a list with 4 lists, only want one
-mod <- st_apply(pred_glm2, pred_glm2, 1:2, mean)
-mod <- st_apply(c(pred_glm2$pred_glm.tiff, pred_glm2$pred_glm.tiff), 1:2, mean)
-
-#3
-unnamed.list <- list(pred_glm2, pred_gam2)
-
-names(unnamed.list) <- c("glm", "gam")
-stack(unnamed.list$glm, unnamed.list$glm, drop=FALSE)
+write_stars(tt, "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/prediction_test/ensemble_pred.tiff")
 
 
-#4
-mean_m <- calc(unnamed.list, mean)
-mean_m <- calc(unlist(unnamed.list), mean)
-
-#5
-my_stars_object <- st_as_stars(unnamed.list)
-models <- c.stars(my_stars_object$glm, my_stars_object$gam)
-
-#6
-my_stars_object$mean <- st_apply(my_stars_object, 1:2, mean)
-my_stars_object$mean <- st_apply(my_stars_object$glm, my_stars_object$gam, 1:2, mean)
-my_stars_object$mean <- st_apply(c(my_stars_object$glm, my_stars_object$gam), 1:2, mean)
-#result is a list with 4 lists, only want one
-
-#7
-  # Define a function to calculate the mean for each cell
-  mean_function <- function(x) {
-    mean_value <- mean(x, na.rm = TRUE)  # Calculate mean, excluding NA values
-    return(mean_value)
-  }
-
-mean_grid <- st_apply(my_stars_object, mean_function)
-
-#8
-clusters_ndvi <- aggregate(pred_glm2, pred_gam2, FUN = mean, na.rm = TRUE)
-
-clusters_ndvi_sf <- st_as_sf(clusters_ndvi) %>%
-  rename(ndvi = "raster_normalitzat.tiff.V1") %>%
-  select(ndvi, geometry)
 
