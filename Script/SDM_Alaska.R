@@ -9,7 +9,9 @@ library(readr)
 library(mgcv)
 library(earth)
 
-data <- "/bioing/data/ArcticSDM_data/"
+#data <- "/bioing/data/ArcticSDM_data/"
+
+data <- "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM_data/"
 
 # ### Projection
 # proj <- "+proj=laea +lon_0=-170 +lat_0=90"
@@ -122,22 +124,34 @@ modTab <- occID %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>
 ##### GLM #####
 formula_glm <- paste0("p ~ ", paste(colnames(modTab)[-1], collapse = " + "))
 glm_mod     <- glm(formula_glm, family = binomial(link = "logit"), data = modTab)
-glm_pre     <- predict(glm_mod)a
+glm_pre     <- predict(glm_mod, type = "response")
 plot(glm_pre)
 
+
 ##### GAM #####
-formula_glm <- formula(paste0("p ~ ", paste0(paste0("s(", colnames(modTab)[-c(1)], collapse = ") + "), ")")))  ########## ???????
-gam_mod     <- gam(formula_glm, family = binomial(link = "logit"), data = modTab)  
-gam_pre     <- predict(gam_mod)
+#The formulae supplied to gam are exactly like those supplied to glm 
+#except that smooth terms, s, te, ti and t2 can be added to the right hand side
+
+library(mgcv)
+formula_gam <- formula(paste0("p ~ ", paste0(paste0("s(", colnames(modTab)[-c(1)], collapse = ") + "), ")"))) 
+formula_gam
+gam_mod     <- gam(formula_gam, family = binomial(link = "logit"), data = modTab)  
+gam_pre     <- predict(gam_mod, type = "response")
 plot(gam_pre)
 
+
 ##### MARS #####
-mars_mod  <- earth(p ~ .,  data = modTab)  ### Model Structure NOT WORKING
-mars_pred <- predict(mars_mod)
-plot(mars_pred)
+library(earth)
+modTabc = na.omit(modTab)
+mars_mod  <- earth(p ~ .,  data = modTabc, glm=list(family=binomial(link = "logit"))) 
+    #needed to exclude NAs, needed to add the glm argument binomial
+mars_pre <- predict(mars_mod, type = "response")
+plot(mars_pre)
+
 
 ##### MaxEnt ###
 ## potentially add ENMevaluate
+library(dismo)
 args_list <- c('responsecurves=TRUE',
                'jackknife=TRUE',
                'pictures=TRUE',
@@ -149,9 +163,15 @@ args_list <- c('responsecurves=TRUE',
                'hinge=TRUE')
 
 maxent_mod <- maxent(modTab[,-1], p = modTab$p, a=NULL, removeDuplicates=TRUE, nbg=10000,
-                     path=wd, args=args_list)
-maxent_pred <- predict(maxent_mod)
-plot(maxent_pred)
+                     args=args_list)
+maxent_pre <- predict(maxent_mod, modTab, type = "response") #needed to input data
+plot(maxent_pre)
 
 
 # }
+library(matrixStats)
+library(dplyr)
+all_pre <- as.data.frame(cbind(glm_pre, gam_pre, mars_pre, maxent_pre))
+colnames(all_pre)[3] = "mars_pre"
+all_pre_av <- all_pre  %>% mutate(mean = rowMeans(.[,1:4]))
+
