@@ -109,6 +109,9 @@ species <- subsetList$gbif %>% group_by(species) %>% st_drop_geometry() %>%
 
 # for(sp in species %>% pull(species)) {
 sp <- (species %>% pull(species))[1]
+sp <- "Picea glauca"
+
+
 
 occID <- subsetList$gbif %>% rownames_to_column(var = 'id') %>%
   filter(species==sp)
@@ -120,6 +123,7 @@ modTab <- occID %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>
   bind_cols(subsetList$env[occID$id,]) %>%
   bind_rows(absID %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
               bind_cols(subsetList$env[absID$id,]))
+
 
 ##### GLM #####
 formula_glm <- paste0("p ~ ", paste(colnames(modTab)[-1], collapse = " + "))
@@ -149,20 +153,15 @@ mars_pre <- predict(mars_mod, type = "response")
 plot(mars_pre)
 
 
-##### MaxEnt ###
+##### MaxEnt ####
 ## potentially add ENMevaluate
 library(dismo)
 args_list <- c('responsecurves=TRUE',
                'jackknife=TRUE',
                'pictures=TRUE',
-               'autofeature=FALSE',
-               'linear=TRUE',
-               'quadratic=TRUE',
-               'product=TRUE',
-               'threshold=TRUE',
-               'hinge=TRUE')
-
-maxent_mod <- maxent(modTab[,-1], p = modTab$p, a=NULL, removeDuplicates=TRUE, nbg=10000,
+               'autofeature=TRUE')
+               
+maxent_mod <- maxent(modTab[,-1], p = modTab$p, a=NULL, removeDuplicates=TRUE, nbg=0,
                      args=args_list)
 maxent_pre <- predict(maxent_mod, modTab, type = "response") #needed to input data
 plot(maxent_pre)
@@ -174,4 +173,425 @@ library(dplyr)
 all_pre <- as.data.frame(cbind(glm_pre, gam_pre, mars_pre, maxent_pre))
 colnames(all_pre)[3] = "mars_pre"
 all_pre_av <- all_pre  %>% mutate(mean = rowMeans(.[,1:4]))
+
+#### auc ####
+library(pROC)
+auc1 <- auc(roc(modTabc$p, glm_pre))
+auc2 <- auc(roc(modTabc$p, gam_pre))
+auc3 <- auc(roc(modTabc$p, mars_pre))
+auc4 <- auc(roc(modTabc$p, maxent_pre))
+
+our_mod = c(auc1, auc2, auc3, auc4)
+aucs = as.data.frame(our_mod)
+aucs$mod = names(all_pre)            
+aucs$ssdm = c(0.8128, 0.8698, 0.8353, 0.8624)
+                                                               
+boxplot(glm_mod$y, glm_mod$fitted.values)
+t.test(glm_mod$y, glm_mod$fitted.values)
+plot(glm_mod$fitted.values, glm_mod$y)
+plot(glm_pre, glm_mod$y)
+
+boxplot(modTabc$p, glm_pre)
+tglm = t.test(modTabc$p, glm_pre)
+
+boxplot(modTabc$p, gam_pre)
+tgam = t.test(modTabc$p, gam_pre)
+
+boxplot(modTabc$p, mars_pre)
+tmars = t.test(modTabc$p, mars_pre)
+
+boxplot(modTabc$p, maxent_pre)
+tmaxent = t.test(modTabc$p, maxent_pre)
+
+aucs$our_p = c(tglm$p.value, tgam$p.value, tmars$parameter, tmaxent$p.value)
+
+AUC <- as.data.frame(aucs[with(aucs,
+                               order(aucs[,"our_mod"], decreasing=TRUE)), ])
+tmaxent
+
+#### 3steps method ####
+##### buffering #####
+presence_sf <- st_as_sf(occID, coords = c("geometry"), crs = 4326) 
+absence_sf <- st_as_sf(absID, coords = c("geometry"), crs = 4326)
+
+####################################
+
+
+###### 1 #####
+
+###### create buffers ######
+presence_buffer1 <- st_buffer(presence_sf, dist = 1000) 
+
+intersection1abs <- st_intersection(absence_sf, presence_buffer1)
+# select the absence data from the buffer
+
+buffer1abs <- intersection1abs[!duplicated(st_coordinates(intersection1abs)), ]
+
+
+intersection1pres <- st_intersection(presence_sf, presence_buffer1)
+# select the presence data from the buffer
+
+
+buffer1pres <- intersection1pres[!duplicated(st_coordinates(intersection1pres)), ]
+
+#create data tab
+modTab_buf1a <- buffer1pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer1pres$id,]) %>%
+  bind_rows(buffer1abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer1abs$id,]))
+
+###### pca  ######
+modTab_buf1 = na.omit(modTab_buf1a)
+
+
+library(FactoMineR)
+res.pca1 <- PCA(modTab_buf1, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont01 <- as.data.frame(res.pca3$var$contrib)
+var_cont1 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub1 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub1$var = rownames(var_cont_sub)
+var_cont_sub1$buf = 1
+
+#################
+
+###### 5 #####
+
+###### create buffers ######
+presence_buffer5 <- st_buffer(presence_sf, dist = 5000) 
+
+intersection5abs <- st_intersection(absence_sf, presence_buffer5)
+# select the absence data from the buffer
+
+buffer5abs <- intersection5abs[!duplicated(st_coordinates(intersection5abs)), ]
+
+
+intersection5pres <- st_intersection(presence_sf, presence_buffer5)
+# select the presence data from the buffer
+
+
+buffer5pres <- intersection5pres[!duplicated(st_coordinates(intersection5pres)), ]
+
+#create data tab
+modTab_buf5 <- buffer5pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer5pres$id,]) %>%
+  bind_rows(buffer5abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer5abs$id,]))
+
+###### pca  ######
+modTab_buf5 = na.omit(modTab_buf5)
+5
+
+library(FactoMineR)
+res.pca5 <- PCA(modTab_buf5, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont05 <- as.data.frame(res.pca3$var$contrib)
+var_cont5 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub5 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub5$var = rownames(var_cont_sub)
+var_cont_sub5$buf = 5
+
+###### 10 #####
+
+###### create buffers ######
+presence_buffer10 <- st_buffer(presence_sf, dist = 10000) 
+
+intersection10abs <- st_intersection(absence_sf, presence_buffer10)
+# select the absence data from the buffer
+
+buffer10abs <- intersection10abs[!duplicated(st_coordinates(intersection10abs)), ]
+
+
+intersection10pres <- st_intersection(presence_sf, presence_buffer10)
+# select the presence data from the buffer
+
+
+buffer10pres <- intersection10pres[!duplicated(st_coordinates(intersection10pres)), ]
+
+#create data tab
+modTab_buf10 <- buffer10pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer10pres$id,]) %>%
+  bind_rows(buffer10abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer10abs$id,]))
+
+###### pca  ######
+modTab_buf10 = na.omit(modTab_buf10)
+10
+
+library(FactoMineR)
+res.pca10 <- PCA(modTab_buf10, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont010 <- as.data.frame(res.pca3$var$contrib)
+var_cont10 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub10 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub10$var = rownames(var_cont_sub)
+var_cont_sub10$buf = 10
+
+###### 20 ######
+
+###### create buffers ######
+presence_buffer20 <- st_buffer(presence_sf, dist = 20000) 
+#=20 km? or 20000*5km because 5000 is resolution
+
+intersection20abs <- st_intersection(absence_sf, presence_buffer20)
+# select the absence data from the buffer
+
+buffer20abs <- intersection20abs[!duplicated(st_coordinates(intersection20abs)), ]
+
+
+intersection20pres <- st_intersection(presence_sf, presence_buffer20)
+# select the presence data from the buffer
+
+
+buffer20pres <- intersection20pres[!duplicated(st_coordinates(intersection20pres)), ]
+
+#create data tab
+modTab_buf20 <- buffer20pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer20pres$id,]) %>%
+  bind_rows(buffer20abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer20abs$id,]))
+
+###### pca  ######
+modTab_buf20 = na.omit(modTab_buf20)
+#res.pca20 <- prcomp(modTab_buf, scale = TRUE) # Compute PCA
+#res.pca2 <- princomp(modTab_buf) # Compute PCA
+
+library(FactoMineR)
+res.pca20 <- PCA(modTab_buf20, ncp=5) # Compute PCA
+#res.pca20$var$contrib
+#note: there is 49% and 10% of variables in dim5
+
+###### variable selection #####
+var_cont020 <- as.data.frame(res.pca3$var$contrib)
+var_cont20 <- as.data.frame(var_cont0[with(var_cont0,
+                        order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub20 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub20$var = rownames(var_cont_sub)
+var_cont_sub20$buf = 20
+
+
+############################
+###### 50 #####
+
+###### create buffers ######
+presence_buffer50 <- st_buffer(presence_sf, dist = 50000) 
+
+intersection50abs <- st_intersection(absence_sf, presence_buffer50)
+# select the absence data from the buffer
+
+buffer50abs <- intersection50abs[!duplicated(st_coordinates(intersection50abs)), ]
+
+
+intersection50pres <- st_intersection(presence_sf, presence_buffer50)
+# select the presence data from the buffer
+
+
+buffer50pres <- intersection50pres[!duplicated(st_coordinates(intersection50pres)), ]
+
+#create data tab
+modTab_buf50 <- buffer50pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer50pres$id,]) %>%
+  bind_rows(buffer50abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer50abs$id,]))
+
+###### pca  ######
+modTab_buf50 = na.omit(modTab_buf50)
+
+
+library(FactoMineR)
+res.pca50 <- PCA(modTab_buf50, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont050 <- as.data.frame(res.pca3$var$contrib)
+var_cont50 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub50 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub50$var = rownames(var_cont_sub)
+var_cont_sub50$buf = 50
+
+################################################
+
+###### 100 #####
+
+###### create buffers ######
+presence_buffer100 <- st_buffer(presence_sf, dist = 100000) 
+
+intersection100abs <- st_intersection(absence_sf, presence_buffer100)
+# select the absence data from the buffer
+
+buffer100abs <- intersection100abs[!duplicated(st_coordinates(intersection100abs)), ]
+
+
+intersection100pres <- st_intersection(presence_sf, presence_buffer100)
+# select the presence data from the buffer
+
+
+buffer100pres <- intersection100pres[!duplicated(st_coordinates(intersection100pres)), ]
+
+#create data tab
+modTab_buf100 <- buffer100pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer100pres$id,]) %>%
+  bind_rows(buffer100abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer100abs$id,]))
+
+###### pca  ######
+modTab_buf100 = na.omit(modTab_buf100)
+10
+
+library(FactoMineR)
+res.pca100 <- PCA(modTab_buf100, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont0100 <- as.data.frame(res.pca3$var$contrib)
+var_cont100 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub100 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub100$var = rownames(var_cont_sub)
+var_cont_sub100$buf = 100
+
+#########################
+
+###### 200 #####
+
+###### create buffers ######
+presence_buffer200 <- st_buffer(presence_sf, dist = 200000) 
+
+intersection200abs <- st_intersection(absence_sf, presence_buffer200)
+# select the absence data from the buffer
+
+buffer200abs <- intersection200abs[!duplicated(st_coordinates(intersection200abs)), ]
+
+
+intersection200pres <- st_intersection(presence_sf, presence_buffer200)
+
+###############################
+# select the presence data from the buffer
+
+
+buffer200pres <- intersection200pres[!duplicated(st_coordinates(intersection200pres)), ]
+
+#create data tab
+modTab_buf200 <- buffer200pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer200pres$id,]) %>%
+  bind_rows(buffer200abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer200abs$id,]))
+
+###### pca  ######
+modTab_buf200 = na.omit(modTab_buf200)
+10
+
+library(FactoMineR)
+res.pca200 <- PCA(modTab_buf200, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont0200 <- as.data.frame(res.pca3$var$contrib)
+var_cont200 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub200 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub200$var = rownames(var_cont_sub)
+var_cont_sub200$buf = 200
+
+##############################
+
+###### 500 #####
+
+###### create buffers ######
+presence_buffer500 <- st_buffer(presence_sf, dist = 500000) 
+
+intersection500abs <- st_intersection(absence_sf, presence_buffer500)
+# select the absence data from the buffer
+
+buffer500abs <- intersection500abs[!duplicated(st_coordinates(intersection500abs)), ]
+
+
+intersection500pres <- st_intersection(presence_sf, presence_buffer500)
+# select the presence data from the buffer
+
+
+buffer500pres <- intersection500pres[!duplicated(st_coordinates(intersection500pres)), ]
+
+#create data tab
+modTab_buf500 <- buffer500pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer500pres$id,]) %>%
+  bind_rows(buffer500abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer500abs$id,]))
+
+###### pca  ######
+modTab_buf500 = na.omit(modTab_buf500)
+10
+
+library(FactoMineR)
+res.pca500 <- PCA(modTab_buf500, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont0500 <- as.data.frame(res.pca3$var$contrib)
+var_cont500 <- as.data.frame(var_cont0[with(var_cont0,
+                                           order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub500 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub500$var = rownames(var_cont_sub)
+var_cont_sub500$buf = 500
+
+
+###### 5000 #####
+
+###### create buffers ######
+presence_buffer5000 <- st_buffer(presence_sf, dist = 5000000) 
+
+intersection5000abs <- st_intersection(absence_sf, presence_buffer5000)
+# select the absence data from the buffer
+
+buffer5000abs <- intersection5000abs[!duplicated(st_coordinates(intersection5000abs)), ]
+
+
+intersection5000pres <- st_intersection(presence_sf, presence_buffer5000)
+# select the presence data from the buffer
+
+
+buffer5000pres <- intersection5000pres[!duplicated(st_coordinates(intersection5000pres)), ]
+
+#create data tab
+modTab_buf5000 <- buffer5000pres %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[buffer5000pres$id,]) %>%
+  bind_rows(buffer5000abs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[buffer5000abs$id,]))
+
+###### pca  ######
+modTab_buf5000 = na.omit(modTab_buf5000)
+10
+
+library(FactoMineR)
+res.pca5000 <- PCA(modTab_buf5000, ncp=5) # Compute PCA
+
+
+###### variable selection #####
+var_cont05000 <- as.data.frame(res.pca3$var$contrib)
+var_cont5000 <- as.data.frame(var_cont0[with(var_cont0,
+                                            order(var_cont0[,"Dim.1"], decreasing=TRUE)), ])
+var_cont_sub5000 = as.data.frame(var_cont[1:3, 1:2])
+var_cont_sub5000$var = rownames(var_cont_sub)
+var_cont_sub5000$buf = 5000
+
+##### results #####
+results <- rbind(var_cont_sub1, var_cont_sub5, var_cont_sub20, var_cont_sub50,
+                 var_cont_sub100, var_cont_sub200,  var_cont_sub500, var_cont_sub5000)
+
+results.prec = subset(results, results$var =="prec")
+plot(results.prec$buf, results.prec$Dim.1, type = "o")
+
+results.bio17 = subset(results, results$var =="bio17")
+plot(results.bio17$buf, results.bio17$Dim.1, type = "o")
+lines(results.prec$buf, results.prec$Dim.1, type = "o", col="red")
 
