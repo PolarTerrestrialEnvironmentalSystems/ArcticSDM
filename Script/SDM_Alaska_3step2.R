@@ -216,6 +216,36 @@ absence_sf <- st_as_sf(absID, coords = c("geometry"), crs = 4326)
 
 ####################################
 
+#### short ####
+
+#there is a bracket error, and I can see why, but I want the bracket for the
+#lapply loop to go around everything
+
+buf_list <- list(1, 5, 10, 20, 50, 100, 200, 500, 5000)
+
+lapply(1:length(buf_list), function(f) 
+  
+bufferabs <- st_buffer(presence_sf, dist = buf_list[f]) %>%
+  st_intersection(absence_sf, .) %>%
+  .[!duplicated(st_coordinates(.)),] #intersection5000pres[!duplicated(st_coordinates(intersection5000pres)), ]
+
+modTab_buf <- occID %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+  bind_cols(subsetList$env[occID$id,]) %>%
+  bind_rows(bufferabs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
+              bind_cols(subsetList$env[bufferabs$id,])))
+
+library(FactoMineR)
+
+results <- list()
+results[[f]] <- 
+  PCA(na.omit(modTab_buf), ncp=5) %>% #pca
+  
+  as.data.frame(res.pca5000$var$contrib) %>% #subset 
+  .[with(., order(.[,"Dim.1"], decreasing=TRUE)),] %>% #sort
+  
+  as.data.frame(.[1:3, 1:2]) %>% #subset
+  mutate(var = rownames(.), #add infos
+         buf = buf_list[f]))
 
 ###### 1 #####
 
@@ -685,6 +715,8 @@ best_buf <- results.prec$buf[which.max(results.prec$Dim.1)]
 #st_intersection(absence_sf, (st_buffer(presence_sf, dist = 1000)))
 #buffer1abs <- st_intersection(absence_sf, (st_buffer(presence_sf, dist = 1000)))[!duplicated(st_coordinates(st_intersection(absence_sf, (st_buffer(presence_sf, dist = 1000))))), ]
 
+#there is a bracket error, and I can see why, but I want the bracket for the
+#lapply loop to go around everything
 
 buf_list <- list(1, 5, 10, 20, 50, 100, 200, 500, 5000)
 
@@ -712,19 +744,7 @@ results[[f]] <-
   mutate(var = rownames(.), #add infos
          buf = buf_list[f])) 
 
-#
-
-best_buf <- results.prec$buf[which.max(results.prec$Dim.1)]
-#save results in one table in the end at one position after the other, f is the row 
 
 
-#var_cont01 <- as.data.frame(res.pca1$var$contrib)
-#var_cont1 <- as.data.frame(var_cont01[with(var_cont01,
- #                                         order(var_cont01[,"Dim.1"], decreasing=TRUE)), ])
 
 
-#var_cont_sub1 = var_cont1 %>% as.data.frame(var_cont1[1:3, 1:2]) %>% 
-#           mutate(var = rownames(var_cont_sub1), 
- #                  buf = 1)
-
-  
