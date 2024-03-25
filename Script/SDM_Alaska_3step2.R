@@ -210,42 +210,12 @@ AUC <- as.data.frame(aucs[with(aucs,
 tmaxent
 
 #### 3steps method ####
-##### buffering #####
+
+##### Step 1: Specifying geographical extent  #####
 presence_sf <- st_as_sf(occID, coords = c("geometry"), crs = 4326) 
 absence_sf <- st_as_sf(absID, coords = c("geometry"), crs = 4326)
 
 ####################################
-
-#### short ####
-
-#there is a bracket error, and I can see why, but I want the bracket for the
-#lapply loop to go around everything
-
-buf_list <- list(1, 5, 10, 20, 50, 100, 200, 500, 5000)
-
-lapply(1:length(buf_list), function(f) 
-  
-bufferabs <- st_buffer(presence_sf, dist = buf_list[f]) %>%
-  st_intersection(absence_sf, .) %>%
-  .[!duplicated(st_coordinates(.)),] #intersection5000pres[!duplicated(st_coordinates(intersection5000pres)), ]
-
-modTab_buf <- occID %>% mutate(p = 1) %>% dplyr::select(p) %>% st_drop_geometry() %>%
-  bind_cols(subsetList$env[occID$id,]) %>%
-  bind_rows(bufferabs %>% mutate(p = 0) %>% dplyr::select(p) %>% st_drop_geometry() %>%
-              bind_cols(subsetList$env[bufferabs$id,])))
-
-library(FactoMineR)
-
-results <- list()
-results[[f]] <- 
-  PCA(na.omit(modTab_buf), ncp=5) %>% #pca
-  
-  as.data.frame(res.pca5000$var$contrib) %>% #subset 
-  .[with(., order(.[,"Dim.1"], decreasing=TRUE)),] %>% #sort
-  
-  as.data.frame(.[1:3, 1:2]) %>% #subset
-  mutate(var = rownames(.), #add infos
-         buf = buf_list[f]))
 
 ###### 1 #####
 
@@ -739,12 +709,75 @@ results[[f]] <-
   
   as.data.frame(res.pca5000$var$contrib) %>% #subset 
   .[with(., order(.[,"Dim.1"], decreasing=TRUE)),] %>% #sort
-  
+
   as.data.frame(.[1:3, 1:2]) %>% #subset
   mutate(var = rownames(.), #add infos
-         buf = buf_list[f])) 
+         buf = buf_list[f])
 
 
+#### Step 2: Environmental profiling of background ####
+
+#According to step 1,  buffer 200  is best.
+
+#data to use: modTab_buf200
+
+library(e1071)
+
+#long
+
+df <- subset(modTab_buf200, p == 0)  #choose only absence data
+
+x <- subset(df, select = -p) #make x variables, only variables
+y <- df$p #make y variable(dependent)
+
+model <- svm(x, y,type='one-classification') #train an one-classification model 
+print(model)
+summary(model) #print summary
+
+# predict
+modTab_buf200$pred <- predict(model, subset(modTab_buf200, select=-p)) #create prediction
 
 
+#short
+model2 <- svm(modTab_buf200 %>% subset(p==0) %>%
+                subset(., select=-p),
+              modTab_buf200%>% subset(p==0) %>%
+                subset(., select=p), type='one-classification')
 
+modTab_buf200 %>%
+  mutate(pred = predict(model2, subset(modTab_buf200, select=-p)))
+
+####  Step 3: K-means clustering ####
+
+#long
+
+modTab_buf200_abs = modTab_buf200 %>% subset(pred == "FALSE") #define data
+#summary(modTab_buf200_abs) #most p's are also 0 for all FALSE selected
+
+k = nrow(modTab_buf200 %>% subset(p == 1)) #define k, equals nr of presences
+
+# Load necessary packages
+library(cluster)
+library(factoextra)
+
+# Perform k-means clustering 
+fit <- kmeans(modTab_buf200_abs, centers = k)
+
+# Visualize clusters
+library(fpc)
+plotcluster(modTab_buf200_abs[,2:23], fit$cluster, pointsbyclvecd = FALSE)
+
+abs <- as.data.frame(fit$centers) #final estimate of cluster centroids, best abs 
+#FINAL ABSENCE DATA#
+
+
+#short
+absk <- kmeans((modTab_buf200 %>% subset(pred == "FALSE")), 
+              centers = nrow(modTab_buf200 %>% subset(p == 1))) #%>%
+        #pull(centers)
+        #select(., centers)
+        #subset(., select = centers)
+        #reduce, drop_geometry?
+
+abs = absk$centers
+        
