@@ -205,8 +205,10 @@ tmaxent = t.test(modTabc$p, maxent_pre)
 
 aucs$our_p = c(tglm$p.value, tgam$p.value, tmars$parameter, tmaxent$p.value)
 
-AUC <- as.data.frame(aucs[with(aucs,
-                               order(aucs[,"our_mod"], decreasing=TRUE)), ])
+
+AUC <- aucs
+  #as.data.frame(aucs[with(aucs,
+                              # order(aucs[,"our_mod"], decreasing=TRUE)), ])
 tmaxent
 
 #### 3steps method ####
@@ -769,7 +771,7 @@ plotcluster(modTab_buf200_abs[,2:23], fit$cluster, pointsbyclvecd = FALSE)
 
 abs <- as.data.frame(fit$centers) #final estimate of cluster centroids, best abs 
 #FINAL ABSENCE DATA#
-
+write_csv(abs,  "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/data/3stepabs.csv")
 
 #short
 absk <- kmeans((modTab_buf200 %>% subset(pred == "FALSE")), 
@@ -781,3 +783,99 @@ absk <- kmeans((modTab_buf200 %>% subset(pred == "FALSE")),
 
 abs = absk$centers
         
+#### try new data ####
+modTab_new = bind_rows(modTab %>% subset(p == 1),
+abs[,1:23])
+
+modTab_new[141:280,1] = 0
+
+write_csv(modTab_new,  "//smb.isipd.dmawi.de/projects/bioing/data/ArcticSDM/data/3steppresabs.csv")
+##### GLM #####
+formula_glmn <- paste0("p ~ ", paste(colnames(modTab_new)[-1], collapse = " + "))
+glm_modn     <- glm(formula_glmn, family = binomial(link = "logit"), data = modTab_new)
+glm_pren     <- predict(glm_modn, type = "response")
+plot(glm_pren)
+
+
+##### GAM #####
+#The formulae supplied to gam are exactly like those supplied to glm 
+#except that smooth terms, s, te, ti and t2 can be added to the right hand side
+
+library(mgcv)
+formula_gamn <- formula(paste0("p ~ ", paste0(paste0("s(", colnames(modTab_new)[-c(1)], collapse = ") + "), ")"))) 
+gam_modn     <- gam(formula_gamn, family = binomial(link = "logit"), data = modTab_new)  
+gam_pren     <- predict(gam_modn, type = "response")
+plot(gam_pren)
+
+
+##### MARS #####
+library(earth)
+modTabcn = na.omit(modTab_new)
+mars_modn  <- earth(p ~ .,  data = modTabcn, glm=list(family=binomial(link = "logit"))) 
+#needed to exclude NAs, needed to add the glm argument binomial
+mars_pren <- predict(mars_modn, type = "response")
+plot(mars_pren)
+
+##### MaxEnt ####
+## potentially add ENMevaluate
+library(dismo)
+args_list <- c('responsecurves=TRUE',
+               'jackknife=TRUE',
+               'pictures=TRUE',
+               'autofeature=TRUE')
+
+maxent_modn <- maxent(modTab_new[,-1], p = modTab_new$p, a=NULL, removeDuplicates=TRUE, nbg=0,
+                     args=args_list)
+maxent_pren <- predict(maxent_modn, modTab_new, type = "response") #needed to input data
+plot(maxent_pren)
+
+
+# }
+library(matrixStats)
+library(dplyr)
+all_pren <- as.data.frame(cbind(glm_pren, gam_pren, mars_pren, maxent_pren))
+colnames(all_pren)[3] = "mars_pre"
+all_pre_avn <- all_pren  %>% mutate(mean = rowMeans(.[,1:4]))
+
+#### auc ####
+library(pROC)
+auc1n <- auc(roc(modTabcn$p, glm_pren))
+auc2n <- auc(roc(modTabcn$p, gam_pren))
+auc3n <- auc(roc(modTabcn$p, mars_pren))
+auc4n <- auc(roc(modTabcn$p, maxent_pren))
+
+our_modn = c(auc1n, auc2n, auc3n, auc4n)
+aucsn = as.data.frame(our_modn)
+aucsn$mod = names(all_pren)            
+aucsn$ssdm = c(0.8128, 0.8698, 0.8353, 0.8624)
+
+boxplot(glm_modn$y, glm_modn$fitted.values)
+t.test(glm_modn$y, glm_modn$fitted.values)
+plot(glm_modn$fitted.values, glm_modn$y)
+plot(glm_pren, glm_modn$y)
+
+boxplot(modTabcn$p, glm_pren)
+tglmn = t.test(modTabcn$p, glm_pren)
+plot(glm_modn$data$p, glm_modn$fitted.values)
+t.test(glm_modn$data$p, glm_modn$fitted.values)
+
+glmsub = subset(glm_modn,glm_modn$data$p == 1) 
+mean(glmsub$fitted.values)
+  
+boxplot(modTabcn$p, gam_pren)
+tgamn = t.test(modTabcn$p, gam_pren)
+tgamn
+boxplot(modTabcn$p, mars_pren)
+tmarsn = t.test(modTabcn$p, mars_pren)
+tmarsn
+boxplot(modTabcn$p, maxent_pren)
+tmaxentn = t.test(modTabcn$p, maxent_pren)
+
+aucsn$our_pn = c(tglmn$p.value, tgamn$p.value, tmarsn$p.value, tmaxentn$p.value)
+
+AUCn <- aucsn
+#as.data.frame(aucsn[with(aucsn,
+ #                              order(aucsn[,"our_modn"], decreasing=TRUE)), ])
+
+AUCn$our_mod = AUC$our_mod
+AUCn$our_p = AUC$our_p
