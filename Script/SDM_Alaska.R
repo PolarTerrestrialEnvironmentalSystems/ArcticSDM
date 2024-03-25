@@ -155,14 +155,9 @@ library(dismo)
 args_list <- c('responsecurves=TRUE',
                'jackknife=TRUE',
                'pictures=TRUE',
-               'autofeature=FALSE',
-               'linear=TRUE',
-               'quadratic=TRUE',
-               'product=TRUE',
-               'threshold=TRUE',
-               'hinge=TRUE')
+               'autofeature=FALSE')
 
-maxent_mod <- maxent(modTab[,-1], p = modTab$p, a=NULL, removeDuplicates=TRUE, nbg=10000,
+maxent_mod <- maxent(modTab[,-1], p = modTab$p, a=NULL, removeDuplicates=TRUE, nbg=0,
                      args=args_list)
 maxent_pre <- predict(maxent_mod, modTab, type = "response") #needed to input data
 plot(maxent_pre)
@@ -175,3 +170,7 @@ all_pre <- as.data.frame(cbind(glm_pre, gam_pre, mars_pre, maxent_pre))
 colnames(all_pre)[3] = "mars_pre"
 all_pre_av <- all_pre  %>% mutate(mean = rowMeans(.[,1:4]))
 
+summary(glm_mod)
+summary(gam_mod)
+summary(mars_mod)
+summary(maxent_mod)
