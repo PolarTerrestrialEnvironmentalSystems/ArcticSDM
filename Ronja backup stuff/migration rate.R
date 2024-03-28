@@ -7,7 +7,21 @@ rates_meier <- read.csv("C:/Users/roschw001/Documents/migration values/migration
 traits <- read.csv("C:/Users/roschw001/Documents/migration values/sibala_traits_google_height.csv - sibala_traits_summary.csv", sep=",", dec=",")
 dispersal <- read.csv("C:/Users/roschw001/Documents/migration values/sibala_traits_google_height.csv - dispersal_Lososova.csv", sep=",", dec=",")
 
+species_mod <- read.csv("C:/Users/roschw001/Documents/migration values/SpeciesList.csv", sep=",", dec=".")
 
+species_mod50 = species_mod %>% filter(nrOcc > 1000)
+
+speciestraits <- species_mod50 %>% left_join(traits, by = join_by("species" == "species"))
+speciestraitsna = na.omit(speciestraits) #we have data
+
+#50  3221 1262
+#100 2381 1111
+#200 1675  919
+#300 1304  775
+#500  899  613
+#1000 494  400
+
+summary(species_mod$nrOcc)
 #### join ####
 library(tidyverse)
 rates0 <- rates_meier %>% full_join(rates_zani, by = join_by("species" == "species"), 
