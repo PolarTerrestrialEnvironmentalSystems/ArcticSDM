@@ -99,13 +99,20 @@ change$shift <- ifelse(change$delta.max == 0 & change$delta.min == 0, "none",
 change$species = spTable$species
 
 
+change_avg <- as.data.frame(cbind(spTable$species, mean_values$changemean, median_values$changemean, mean_values$deltamean, median_values$deltamedian))
+colnames(change_avg) <- c("species", "change.mean", "change.median", "delta.mean", "delta.median")
+
+change_avg$summary <- ifelse(change_avg$change.mean == change_avg$change.median, change_avg$change.mean, "unclear")
+
+
+changeTNS$lat_avg <-change_avg$summary
 
 #### H4 change of communities ####
 
 memberships <- read.csv("membercl_y1s1.csv", sep=",")
 colnames(memberships) <- c("community", "species")
 
-change$community <- memberships$community
+changeTNS$community <- memberships$community
 
-change  %>%
-  filter(community == "1")
+changeTNS  %>%
+  filter(community == "3")
