@@ -12,17 +12,21 @@ sf_use_s2(FALSE)
 library(dplyr)
 
 #input
-#setwd("//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays")
-data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays"
+setwd("//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays")
 
-load(glue::glue("{data}/spTable.rda"))
-load(glue::glue("{data}/binaryArray_25km.rda"))
+data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/"
 
-#binarArray[species, cells, year, scenario]
+load(glue::glue("{data}/sdm_occurance_array_array_25km.rda")) #only array
+load(glue::glue("{data}/sdm_occurance_array_metadata_25km.rda")) #only meta
+
+spTable <- as.data.frame(spArrayMeta[[1]])
+colnames(spTable) <- "species"
+
+#spArray[species, cells, year, scenario]
 
 
 #all species y1s1
-sppres <- as.data.frame(binarArray[,,1,1])
+sppres <- as.data.frame(spArray[,,1,1])
 dat <- as.data.frame(t(sppres))
 
 site <- seq(1, nrow(dat),1)
@@ -39,7 +43,7 @@ d <- as.data.frame(t(data))
 library(psych)
 library(igraph)
 
-sppres <- as.data.frame(binarArray[,,1,1])
+sppres <- as.data.frame(spArray[,,1,1])
 dat <- as.data.frame(t(sppres))
 colnames(dat) <- spTable$species
     
@@ -60,10 +64,10 @@ library(igraph)
 G = G2 #graph
 
 # 1. Apply clustering algorithm A on G nP times, yielding nP partitions
-nP <- 10 # number of partitions to generate
+nP <- 100 # number of partitions to generate
 partitions <- list()
 for (i in 1:nP) {
-  partitions[[i]] <- cluster_fast_greedy(G) # replace with desired clustering algorithm
+  partitions[[i]] <- cluster_louvain(G) # replace with desired clustering algorithm
 }
 
 
@@ -118,7 +122,7 @@ if (!partitions_equal) {
   D[D < tau] <- 0
   partitions_D <- list()
   for (i in 1:nP) {
-    partitions_D[[i]] <- cluster_fast_greedy(graph_from_adjacency_matrix(D))
+    partitions_D[[i]] <- cluster_louvain(graph_from_adjacency_matrix(D))
   }
   
   # Check again
@@ -140,7 +144,9 @@ if (partitions_equal) {
 
 membercl <- data.frame(group = partitions_D[[1]]$membership, label = spTable$species)
 membercl #communities for y1s1
-    
+ 
+setwd("C:/Users/roschw001/Documents/R/SDM/SDM/ArcticSDMserver/ArcticSDM/hypotheses_results")
+write.csv(membercl, "membercl_y1s1_100.csv", row.names = FALSE)
   
 #### H5 net loop ####
 library(psych)
@@ -152,7 +158,7 @@ for (y in 1:4){
   communities[[y]] <- list()
   for (s in 1:3){  
 
-sppres <- as.data.frame(binarArray[,,y,s])
+sppres <- as.data.frame(spArray[,,y,s])
 dat <- as.data.frame(t(sppres))
 colnames(dat) <- spTable$species
 
@@ -178,7 +184,7 @@ G = G2 #graph
 nP <- 10 # number of partitions to generate
 partitions <- list()
 for (i in 1:nP) {
-  partitions[[i]] <- cluster_fast_greedy(G) # replace with desired clustering algorithm
+  partitions[[i]] <- cluster_louvain(G) # replace with desired clustering algorithm
 }
 
 
@@ -233,7 +239,7 @@ if (!partitions_equal) {
   D[D < tau] <- 0
   partitions_D <- list()
   for (i in 1:nP) {
-    partitions_D[[i]] <- cluster_fast_greedy(graph_from_adjacency_matrix(D))
+    partitions_D[[i]] <- cluster_louvain(graph_from_adjacency_matrix(D))
   }
   
   # Check again
@@ -313,25 +319,51 @@ rownames(j) <- c(1,2,3)
 
 jlist <- list()
 
-for (c in 1:4){ #c is the community number
-  
-a <- subset(communities[[1]][[1]], communities[[1]][[1]][1]==c)
+#### jaccard ####
 
-for (y in 1:4){
-  for (s in 1:3){
-
-    b <- subset(communities[[y]][[s]], communities[[y]][[s]][1]==c)
-    
-j[s,y] <- jaccard(a,b)
-
-  }
+#Calculate Jaccard similarity
+jaccard <- function(a, b) {
+  intersection = length(intersect(a, b))
+  union = length(unique(c(a, b)))
+  jac <- intersection / union
 }
+
+j <- as.data.frame(matrix(ncol=4, nrow=3))
+colnames(j) <- c(1,2,3,4)
+rownames(j) <- c(1,2,3)
+
+
+jlist <- list()
+
+for (c in 1:59){ #c is the community number
+  a <- subset(scenlist[[1]], scenlist[[1]][2] ==1)
+  
+  for (y in 1:4){
+    for (s in 1:3){
+      
+      b <- subset(scenlist[[y]], scenlist[[y]][s] ==c)
+      
+      j[s,y] <- jaccard(a,b)
+      
+    }
+  }
   jlist[[c]] <- j
 }
 
 
 jlist[[4]]
 
+st_jlist <- st_as_stars(jlist)
+st_comlist <- st_as_stars(comlist)
+st_scenlist <- st_as_stars(scenlist)
 
+write_stars(st_jlist, "H5_jlist.tif")
+save(st_comlist, "H5_comlist.rda")
+st_comlist
+comlist3 <- comlist
 
+save(comlist3, file = "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays/comlist.rda")
+save(scenlist, file = "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays/scenlist.rda")
+save(jlist, file = "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays/jlist.rda")
 
+load("//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays/comlist3.rda")

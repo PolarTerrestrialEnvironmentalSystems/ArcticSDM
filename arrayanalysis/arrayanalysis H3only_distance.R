@@ -18,10 +18,11 @@ data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/"
 
 load(glue::glue("{data}/sdm_occurance_array_array_25km.rda")) #only array
 load(glue::glue("{data}/sdm_occurance_array_metadata_25km.rda")) #only meta
+load(glue::glue("{data}/sdm_arrays/grid_25km.rda")) #working grid
 
 spTable <- as.data.frame(spArrayMeta[[1]])
 colnames(spTable) <- "species"
-grid <- as.data.frame(spArrayMeta[[2]])
+#grid <- as.data.frame(spArrayMeta[[2]])
 
 
 
@@ -46,6 +47,15 @@ colnames(max_values) <- nam
 colnames(median_values) <- nam
 colnames(mean_values) <- nam
 
+#### distance ####
+
+distg <- grid %>%
+  mutate(dist_n = st_distance(geometry, st_sfc(st_point(c(0, 0)), crs = st_crs(grid))))
+
+plot(distg %>% dplyr::select(dist_n) %>% st_as_stars())
+
+colnames(distg)[5] <- "distN"
+
 #### calculation loop ####
 for (sp in 1:nrow(spTable)) {
   
@@ -55,19 +65,19 @@ a <- as.data.frame(cbind(grid, species))
 
 X <- atan2(coords$Y, coords$X) * 180 / pi
 Y <- atan2(coords$Y, coords$X * cos(X * pi/180)) * 180 / pi
-xysp <- as.data.frame(cbind(X, Y, species))
-
+xysp <- as.data.frame(cbind(X, Y, distg$distN, species))
+colnames(xysp)[3] <- "distN"
 
 for (i in 1:12) {
-  v = i + 2
+  v = i + 3
 # Filter the data frame to keep only rows where a is equal to 1
 filtered_data <- subset(xysp, xysp[, v] == 1)
 
 # Find the maximum value of x in the filtered data
-min_values[sp,i] <- min(filtered_data$Y)
-max_values[sp,i] <- max(filtered_data$Y)
-median_values[sp,i] <- median(filtered_data$Y)
-mean_values[sp,i] <- mean(filtered_data$Y)
+min_values[sp,i] <- min(filtered_data$distN)
+max_values[sp,i] <- max(filtered_data$distN)
+median_values[sp,i] <- median(filtered_data$distN)
+mean_values[sp,i] <- mean(filtered_data$distN)
 
 }
 }

@@ -14,10 +14,15 @@ library(tidyverse)
 #input
 
 data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays"
+data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/"
 
-load(glue::glue("{data}/spTable.rda"))g
-load(glue::glue("{data}/binaryArray_25km.rda"))
-load(glue::glue("{data}/grid_25km.rda"))
+load(glue::glue("{data}/sdm_occurance_array_array_25km.rda")) #only array
+load(glue::glue("{data}/sdm_occurance_array_metadata_25km.rda")) #only meta
+
+spTable <- as.data.frame(spArrayMeta[[1]])
+colnames(spTable) <- "species"
+grid <- as.data.frame(spArrayMeta[[2]])
+
 #region
 
 ecopath <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM"
@@ -39,18 +44,21 @@ grid$T <- ifelse(grid$Ecoregion %in% tundra_regions, "tundra",
                 ifelse(grid$Ecoregion %in% taiga_regions, "taiga", NA))
 
 sp =1
-species <- as.data.frame(binarArray[sp,,,]) #per species
+species <- as.data.frame(spArray[sp,,,]) #per species
 a <- as.data.frame(cbind(grid, species))
 coords <- as.data.frame(st_coordinates(a$geometry, dims = c("x", "y"))) #extract coords
+#Calculate decimal degree coordinates
+X <- atan2(coords$Y, coords$X) * 180 / pi
+Y <- atan2(coords$Y, coords$X * cos(X * pi/180)) * 180 / pi
 xysp <- as.data.frame(cbind(coords, species, a$T))
 
 colnames(xysp) <- c("x", "y", "y1s1", "y2s1", "y3s1", "y4s1", 
          "y1s2","y2s2","y3s2", "y4s2",
          "y1s3","y2s3","y3s3","y4s3", "T")
 
-#binarArray[species, cells, year, scenario]
+#spArray[species, cells, year, scenario]
 
-sp1a <- as.data.frame(binarArray[1,,,])
+sp1a <- as.data.frame(spArray[1,,,])
 
 resultlist <- list()
 
@@ -67,7 +75,7 @@ for(sp in 1:nrow(spTable)){
   
   rownames(results) <- c("sum_taiga", "sum_tundra", "percent")
   
-  species <- as.data.frame(binarArray[sp,,,]) #per species
+  species <- as.data.frame(spArray[sp,,,]) #per species
   a <- as.data.frame(cbind(grid, species))
   coords <- as.data.frame(st_coordinates(a$geometry, dims = c("x", "y"))) #extract coords
   xysp <- as.data.frame(cbind(coords, species, a$T))
@@ -154,3 +162,12 @@ changeTNS <- as.data.frame(cbind(changeT$species, changeT$change, changeT2$chang
 colnames(changeTNS) = c("species",'Taiga_Tundra', "Taiga_Tundra_share", "lat_minmax")
 
 
+changeTNS$lat_avg <-change_avg$summary
+
+summary(as.factor(changeTNS$Taiga_Tundra))
+summary(as.factor(changeTNS$Taiga_Tundra_share))
+summary(as.factor(changeTNS$lat_minmax))
+summary(as.factor(changeTNS$lat_avg))
+summary(as.factor(changeTNS$Taiga_Tundra))
+
+write.csv2(changeTNS, "H3_changeTNS.csv", row.names = F)

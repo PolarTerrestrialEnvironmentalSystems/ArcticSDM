@@ -11,25 +11,37 @@ library(dplyr)
 #input
 #setwd("//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays")
 data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/sdm_arrays"
+load(glue::glue("{data}/grid_25km.rda"))
 
 load(glue::glue("{data}/spTable.rda"))
-load(glue::glue("{data}/binaryArray_5km.rda"))
+load(glue::glue("{data}/binaryArray_25km.rda"))
+
+
+communities <- read.csv("C:/Users/roschw001/Documents/R/SDM/SDM/ArcticSDMserver/ArcticSDM/arrayanalysis/membercl_y1s1.csv")
 
 #binarArray[species, cells, year, scenario]
 
-sppres <- as.data.frame(binarArray[1,,,])
+c2 <- subset(communities, communities$group ==1)
+c2 <- subset(communities, communities$group ==2)
+c3 <- subset(communities, communities$group ==3)
+
+sppres <- c1
 
 #### richnesstab ####
 
 richnesstab <-
-  as.data.frame(matrix(nrow = ncol(sppres), ncol=12))
+  as.data.frame(matrix(nrow = nrow(sppres), ncol=12))
 colnames(richnesstab) <- c("y1s1", "y2s1", "y3s1", "y4s1", 
                           "y1s2","y2s2","y3s2", "y4s2",
                           "y1s3","y2s3","y3s3","y4s3")
 
 #s1
 for (y in 1:4){
-sppres <- as.data.frame(binarArray[,,y,1])
+sppres <- as.data.frame(binarArray[,,y,1]) %>%
+  mutate(species = spTable$species) %>%
+  filter(species%in%c2$label) %>%
+  .[,-38658]
+
 for (i in 1:ncol(sppres)) {#all cells
   sum_val <- sum(sppres[1:nrow(sppres), i]) #all species, cell
   richnesstab[i, y]<- sum_val
@@ -38,7 +50,11 @@ for (i in 1:ncol(sppres)) {#all cells
 
 #s2
 for (y in 1:4){
-  sppres <- as.data.frame(binarArray[,,y,2])
+   sppres <- as.data.frame(binarArray[,,y,2]) %>%
+    mutate(species = spTable$species) %>%
+    filter(species%in%c2$label) %>%
+    .[,-38658]
+  
   for (i in 1:ncol(sppres)) {#all cells
     sum_val <- sum(sppres[1:nrow(sppres), i]) #all species, cell
     richnesstab[i, y+4]<- sum_val
@@ -47,12 +63,50 @@ for (y in 1:4){
 
 #s3
 for (y in 1:4){
-  sppres <- as.data.frame(binarArray[,,y,3])
+  sppres <- as.data.frame(binarArray[,,y,3]) %>%
+    mutate(species = spTable$species) %>%
+    filter(species%in%c2$label) %>%
+    .[,-38658]
+  
   for (i in 1:ncol(sppres)) {#all cells
     sum_val <- sum(sppres[1:nrow(sppres), i]) #all species, cell
     richnesstab[i, y+8]<- sum_val
   }
 }
+
+
+
+#### coords ####
+
+s <- as.data.frame(binarArray[1,,,]) 
+a <- as.data.frame(cbind(grid, s))
+coords <- as.data.frame(st_coordinates(a$geometry, dims = c("x", "y"))) #extract coords
+#Calculate decimal degree coordinates
+lon <- atan2(coords$Y, coords$X) * 180 / pi
+lat <- atan2(coords$Y, coords$X * cos(lon * pi/180)) * 180 / pi
+
+summary(coords)
+richnesscoords <- as.data.frame(cbind(lon, lat, richnesstab)) 
+
+  
+  maxlat <- as.data.frame(matrix(nrow=2, ncol=12))
+  
+  for (i in 3:14){
+
+  m <- max(richnesscoords[,i])
+  ym <- subset(richnesscoords, richnesscoords[,i] == max(richnesscoords[,i]))
+  k = i-2
+  maxlat[1, k] <- max(ym$lat)
+  maxlat[2, k] <- m
+
+  }
+  
+  
+rownames(maxlat) <- c("latitude", "max richness")
+colnames(maxlat) <- c("y1s1", "y2s1", "y3s1", "y4s1", 
+                   "y1s2","y2s2","y3s2", "y4s2",
+                   "y1s3","y2s3","y3s3","y4s3")
+
 
 #### summary ####
 

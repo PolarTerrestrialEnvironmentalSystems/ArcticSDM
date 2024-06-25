@@ -1,9 +1,12 @@
-!#1 with table 12 rows
+#1 with table 12 rows
 #2 with table 4 rows, per scenario
 #3 with species list and tab, 12 rows
 #4 h3 with grid
 
 #### input ####
+
+
+#meters
 
 #packages
 library(stars)
@@ -14,22 +17,56 @@ sf_use_s2(FALSE)
 library(dplyr)
 library(tidyverse)
 #input
-data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/"
+
+data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM"
+
+load(glue::glue("{data}/sdm_arrays/spTable.rda"))
+load(glue::glue("{data}/sdm_arrays/binaryArray_25km.rda"))
+load(glue::glue("{data}/sdm_arrays/grid_25km.rda"))
 
 load(glue::glue("{data}/sdm_occurance_array_array_25km.rda")) #only array
+
 load(glue::glue("{data}/sdm_occurance_array_metadata_25km.rda")) #only meta
+allsp <- as.data.frame(spArray[,,1,1])
 
-spTable <- as.data.frame(spArrayMeta[[1]])
-colnames(spTable) <- "species"
-grid <- as.data.frame(spArrayMeta[[2]])
-
+a <- spArrayMeta[2]
 
 
-#spArray[species, cells, year, scenario]
+distg <- grid %>%
+  mutate(dist_n = st_distance(geometry, st_sfc(st_point(c(0, 0)), crs = st_crs(grid))))
+
+plot(distg %>% dplyr::select(dist_n) %>% st_as_stars())
+
+
+#grid
+g <- st_as_stars(grid)
+sppres <- as.data.frame(spArray[,,1,1])
+sp = as.data.frame(spArrayList[[5]][,,1,1])
+
+gs <- grid %>%
+  mutate(values = sp)
+gs  
+
+richness <- grid %>% mutate(sp = apply(spArray[,,1,1], 2, sum))
+                        
+delta <- grid %>% mutate(a = apply(spArray[,,4,3], 2, sum),
+                      b = apply(spArray[,,1,1], 2, sum),
+                      c = b - a) %>% dplyr::select(c) %>% 
+  st_rasterize(., st_as_stars(st_bbox(grid), dx = 25*1000, dy=25*1000, crs = st_crs(grid)))
+
+
+plot(richness %>% dplyr::select(sp), cex=0.5, pch=16, main="species richness y1s1")
+
+summary(richness)
+plot(delta %>% dplyr::select(c), cex=0.5, pch=16)
+
+
+
+#binarArray[species, cells, year, scenario]
 
 
 #### initiate  ####
-s <- as.data.frame(spArray[1,,,]) 
+s <- as.data.frame(binarArray[1,,,]) 
 a <- as.data.frame(cbind(grid, s))
 coords <- as.data.frame(st_coordinates(a$geometry, dims = c("x", "y"))) #extract coords
 
@@ -49,13 +86,13 @@ colnames(mean_values) <- nam
 #### calculation loop ####
 for (sp in 1:nrow(spTable)) {
   
-species <- as.data.frame(spArray[sp,,,]) #per species
+species <- as.data.frame(binarArray[sp,,,]) #per species
 a <- as.data.frame(cbind(grid, species))
 #Calculate decimal degree coordinates
 
 X <- atan2(coords$Y, coords$X) * 180 / pi
 Y <- atan2(coords$Y, coords$X * cos(X * pi/180)) * 180 / pi
-xysp <- as.data.frame(cbind(X, Y, species))
+xysp <- as.data.frame(cbind(X, Y, distg$distN, species))
 
 
 for (i in 1:12) {
