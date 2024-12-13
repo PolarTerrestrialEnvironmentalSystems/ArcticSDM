@@ -22,18 +22,18 @@ species <- read_csv("species_sigma1.csv")
 
 
 load("sigma1Array.rda")
-
 sig1 <- spArray
 
 load("distconsArray.rda") #sig5
-
 sig5 <- spArray
 
 
 setwd("C:/Users/roschw001/Documents/R/SDM/SDM/ArcticSDMserver/ArcticSDM/hypotheses_results/plot1 data")
-#load("NWdist.rda")
-#load("New.rda")
-#load("NewSm.rda")
+
+newSm <- read.csv("newSm_distcons.csv")
+NWsum <- read.csv("NWsum_distcons.csv")
+NWdist <- read.csv("NWdist_distcons.csv")
+
 
 ### Emerging habitat ###
 
@@ -181,10 +181,55 @@ pl1 <- ggplot(newSm %>% mutate(disp = factor(disp, levels=c("sig5","sig1"))),
 
 print(pl1)
 
-write.csv(newSm, "newSm_distcons.csv")
+#write.csv(newSm, "newSm_distcons.csv")
 
+
+
+### Northward shift ###
+#NW
+
+NW <- lapply(1:dim(sig1)[4], function(s) {
+  
+  parallel::mclapply(1:dim(sig1)[1], function(i) {
+    
+    t(apply(sig1[i,,,s], 1, diff)) %>% as_tibble() %>% setNames(c("2026", "2056", "2086")) %>%
+      
+      mutate(id = 1:nrow(.)) %>% pivot_longer(cols = -id) %>%
+      
+      filter(value>0)
+    
+  }, mc.cores = 1) %>% Reduce("rbind", .) %>% mutate(scenario = s)
+  
+}) %>% Reduce("rbind", .) %>% mutate(disp = "sig1") %>% bind_rows(
+  
+  lapply(1:dim(sig5)[4], function(s) {
+    
+    parallel::mclapply(1:dim(sig5)[1], function(i) {
+      
+      t(apply(sig5[i,,,s], 1, diff)) %>% as_tibble() %>% setNames(c("2026", "2056", "2086")) %>%
+        
+        mutate(id = 1:nrow(.)) %>% pivot_longer(cols = -id) %>%
+        
+        filter(value>0)
+      
+    }, mc.cores = 1) %>% Reduce("rbind", .) %>% mutate(scenario = s)
+    
+  }) %>% Reduce("rbind", .) %>% mutate(disp = "sig5")
+  
+)
+
+
+distGrid <- spArrayMeta$dim2 %>%
+  
+  mutate(id = 1:nrow(.), dist = as.numeric(st_distance(., st_point(c(0,0)) %>% st_sfc(crs = st_crs(spArrayMeta$dim2))))/1000) %>%
+  
+  dplyr::select(id, dist) %>% st_drop_geometry()
+
+
+NWdist <- NW %>% left_join(distGrid, by = "id") %>% mutate(year = as.numeric(name))
 
 ##### Ndist ####
+
 
 # ggplot(NWdist, aes(x = as.numeric(name), y = dist, group = scenario, color = as.factor(scenario))) +
 #   
@@ -225,51 +270,10 @@ NWsum <- NWsum %>%
     
   ))
 
-
-### Northward shift ###
-
+#write.csv(NWsum, "NWsum_distcons.csv", row.names=F)
+write.csv(NWdist, "NWdist_distcons.csv", row.names=F)
 #######################
 
-
-NW <- lapply(1:dim(sig1)[4], function(s) {
-
-  parallel::mclapply(1:dim(sig1)[1], function(i) {
-
-    t(apply(sig1[i,,,s], 1, diff)) %>% as_tibble() %>% setNames(c("2026", "2056", "2086")) %>%
-
-      mutate(id = 1:nrow(.)) %>% pivot_longer(cols = -id) %>%
-
-      filter(value>0)
-
-  }, mc.cores = 1) %>% Reduce("rbind", .) %>% mutate(scenario = s)
-
-}) %>% Reduce("rbind", .) %>% mutate(disp = "sig1") %>% bind_rows(
-
-  lapply(1:dim(sig5)[4], function(s) {
-
-    parallel::mclapply(1:dim(sig5)[1], function(i) {
-
-      t(apply(sig5[i,,,s], 1, diff)) %>% as_tibble() %>% setNames(c("2026", "2056", "2086")) %>%
-
-        mutate(id = 1:nrow(.)) %>% pivot_longer(cols = -id) %>%
-
-        filter(value>0)
-
-    }, mc.cores = 1) %>% Reduce("rbind", .) %>% mutate(scenario = s)
-
-  }) %>% Reduce("rbind", .) %>% mutate(disp = "sig5")
-
-)
-
-
-distGrid <- spArrayMeta$dim2 %>%
-
-  mutate(id = 1:nrow(.), dist = as.numeric(st_distance(., st_point(c(0,0)) %>% st_sfc(crs = st_crs(spArrayMeta$dim2))))/1000) %>%
-
-  dplyr::select(id, dist) %>% st_drop_geometry()
-
-
-NWdist <- NW %>% left_join(distGrid, by = "id") %>% mutate(year = as.numeric(name))
 
 
 pl2 <- ggplot(NWsum %>% mutate(disp = factor(disp, levels=c("sig5","sig1"))),
