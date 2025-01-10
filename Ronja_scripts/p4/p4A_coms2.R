@@ -19,8 +19,9 @@ library(glue)
 
 path <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/data_paper/"
 
-load(glue::glue("{path}/sdm_occurance_metadata_25km_dispersal_99.rda")) #grid
+load(glue::glue("{path}/grid_25km.rda")) #grid
 
+gridsf <- st_as_sf(grid)
 
 #### colours ####
 library(scales)
@@ -75,14 +76,14 @@ col_all <- c(taiga_eu, taiga_eu_E, taiga_eu_E2, taiga_eu_W,
   library(sf)
   library(stars)
  
-  sp_with_groups <- spArrayMeta[[2]] %>%
+  sp_with_groups <- gridsf %>%
     left_join(membercl %>% select(label, new_group), by = join_by(Id == label))
   
   # Rasterizing the data with new_group
   com4 <- sp_with_groups %>%
     mutate(sp = as.factor(new_group)) %>%
     dplyr::select(sp) %>%
-    st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
+    st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
   
  ##### plotting ####
   plot4 <- ggplot() +
@@ -133,14 +134,14 @@ col_all <- c(taiga_eu, taiga_eu_E, taiga_eu_E2, taiga_eu_W,
   
   ##### join ####
 
-  sp_with_groups <- spArrayMeta[[2]] %>%
+  sp_with_groups <- gridsf %>%
     left_join(membercl %>% select(label, new_group), by = join_by(Id == label))
   
   # Rasterizing the data with new_group
   com3 <- sp_with_groups %>%
     mutate(sp = as.factor(new_group)) %>%
     dplyr::select(sp) %>%
-    st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
+    st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
   
   ##### plotting ####
   plot3 <- ggplot() +
@@ -189,21 +190,21 @@ col_all <- c(taiga_eu, taiga_eu_E, taiga_eu_E2, taiga_eu_W,
     ))
   #write.csv(membercl, "membercl2.csv", row.names = F)
   col2 = c(taiga_eu, taiga_eu_E, taiga_ne, tundra)
-  com2 <- spArrayMeta[[2]] %>% mutate(sp = membercl$new_group) %>% dplyr::select(sp) %>%
-    st_rasterize(.,st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_)) 
+  com2 <- gridsf %>% mutate(sp = membercl$new_group) %>% dplyr::select(sp) %>%
+    st_rasterize(.,st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_)) 
   
   unique(membercl$new_group)
   
   ##### join ####
 
-  sp_with_groups <- spArrayMeta[[2]] %>%
+  sp_with_groups <- gridsf %>%
     left_join(membercl %>% select(label, new_group), by = join_by(Id == label))
   
   # Rasterizing the data with new_group
   com2 <- sp_with_groups %>%
     mutate(sp = as.factor(new_group)) %>%
     dplyr::select(sp) %>%
-    st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
+    st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
   
   ##### plotting ####
   plot2 <- ggplot() +
@@ -254,14 +255,14 @@ col_all <- c(taiga_eu, taiga_eu_E, taiga_eu_E2, taiga_eu_W,
   
   ##### join ####
 
-  sp_with_groups <- spArrayMeta[[2]] %>%
+  sp_with_groups <- gridsf %>%
     left_join(membercl %>% select(label, new_group), by = join_by(Id == label))
   
   # Rasterizing the data with new_group
   com1 <- sp_with_groups %>%
     mutate(sp = as.factor(new_group)) %>%
     dplyr::select(sp) %>%
-    st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
+    st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
   
   
   ##### plotting ####

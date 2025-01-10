@@ -13,7 +13,11 @@ library(units)
 
 path <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/data_paper/"
 
-load(glue::glue("{path}/sigma1Array.rda")) #array
+load(glue::glue("{path}/grid_25km.rda")) #grid
+gridsf <- st_as_sf(grid)
+
+load(glue::glue("{path}/predArray.rda")) #array
+spArray <- predArray[,,,,2]
 sp1 <- as.data.frame(spArray[,,1,1])
 sp1 <- as.data.frame(t(sp1))
 
@@ -24,14 +28,12 @@ membercldat4 <- read.csv(glue::glue("{path}/membercl4.csv"))
 
 #### ndist ####
 
-load(glue::glue("{path}/sdm_occurance_metadata_25km_dispersal_99.rda")) #grid
-grid <- as.data.frame(spArrayMeta[[2]])
 
 ##### distance ####
 
-center_point <- st_sfc(st_point(c(0, 0)), crs = st_crs(spArrayMeta[[2]]))
+center_point <- st_sfc(st_point(c(0, 0)), crs = st_crs(grid))
 
-distg <- spArrayMeta[[2]] %>%
+distg <- grid %>%
   mutate(dist_n = st_distance(geometry, center_point))
 
 colnames(distg)[5] <- "distN"
@@ -170,12 +172,12 @@ C <- ggplot(data = m4, aes(x = Category, y = ddist * 0.001, fill = Category)) +
 print(C)
 
 
-D <- ggplot(data = dif, aes(x = Category, y = delta * 0.001, fill = Category)) +
+B <- ggplot(data = dif, aes(x = Category, y = delta * 0.001, fill = Category)) +
   geom_boxplot(color = "black", outlier.size = 1, outlier.shape = 16) +
   labs(x = "",  y = "migration distance [km]", title = "new cells") +
   theme_minimal() +
-  labs(title = expression(paste("C) ", Delta))) + 
- # labs(title = "D) new cells") +  # Update labels
+  labs(title = "B)") + 
+ # labs(title = ") new cells") +  # Update labels
   theme(
     axis.text.x = element_blank(), #element_text(size = 14, angle = 90, vjust = 0.5, hjust = 1),  # Increase x-axis text size
     axis.text.y = element_text(size = 14),  # Increase y-axis text size
@@ -187,7 +189,7 @@ D <- ggplot(data = dif, aes(x = Category, y = delta * 0.001, fill = Category)) +
   scale_fill_manual(values = c("taiga, nearctic" = taiga_ne, 
                                "taiga, eurasian" = taiga_eu)) 
 
-print(D)
+print(B)
 
 
 eu <- subset(dif, dif$Category == "taiga, eurasian")

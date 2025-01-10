@@ -104,7 +104,7 @@ df2 <- df2 %>%
 
 unique(membercldat1$new_group)
 
-B <- ggplot(df2, aes(x = as.factor(year), 
+C <- ggplot(df2, aes(x = as.factor(year), 
                           next_x = next_x, 
                           node = node, 
                           next_node = next_node,
@@ -118,9 +118,9 @@ B <- ggplot(df2, aes(x = as.factor(year),
  theme_sankey() +
   theme(legend.position = "none",
         plot.title = element_text(size = 16)) +
-  ggtitle("B)")+
+  ggtitle("C)")+
   labs(x = "", y = "") 
 
 
 
-print(B)
+print(C)

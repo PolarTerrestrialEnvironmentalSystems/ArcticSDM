@@ -143,7 +143,7 @@ summary_table_long_ne$year <- c(2010, 2040, 2070, 2100, 2010, 2040, 2070, 2100, 
 
 
 #### comparison plot ####
-E <- ggplot() +
+D <- ggplot() +
   geom_point(data = summary_table_long, aes(x = year, y = Value, col = Category), stat = "identity", position = position_dodge()) +
   geom_line(data = summary_table_long, aes(x = year, y = Value, col = Category), stat = "identity", linetype = "dotted", position = position_dodge()) +
   geom_point(data = summary_table_long_ne, aes(x = year, y = Value, col = Category), shape = 17, stat = "identity", position = position_dodge()) +
@@ -160,7 +160,7 @@ E <- ggplot() +
   theme(legend.position = "none",
         plot.title = element_text(size = 16))
 
-print(E)
+print(D)
 
 #### estimations ####
 
