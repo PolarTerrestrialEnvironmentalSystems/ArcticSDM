@@ -11,37 +11,42 @@ library(dplyr)
 library(tidyverse)
 library(ggplot2)
 
-path <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/data_paper/"
+data <- "//smb.isipd.dmawi.de/projects/p_ecohealth/projects/Arctic_SDM/data_paper/"
 
+load(glue::glue("{data}/predArray.rda")) #array
+load(glue::glue("{data}/grid_25km.rda")) #grid
+load(glue::glue("{data}/spTable.rda")) #spTable
 
-load(glue::glue("{path}/sigma1Array.rda")) #array
-load(glue::glue("{path}/sdm_occurance_metadata_25km_dispersal_99.rda")) #grid
+spArray <- predArray[,,,,2]
 
-spTable <- read_csv(glue::glue("{path}/species_sigma1.csv"))
+gridsf <- st_as_sf(grid)
 
-grid <- as.data.frame(spArrayMeta[[2]])
-
-com1 <- spArrayMeta[[2]] %>%
-  mutate(sp = apply(spArray[,,1,1], 2, sum)) %>%
+com1 <- gridsf %>%
+  mutate(sp = apply(spArray[,,1,1], 2, sum, na.rm = TRUE)) %>%
   dplyr::select(sp) %>%
-  st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
-
-summary(apply(spArray[,,1,1], 2, sum))
+  st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
 
 
-com2 <- spArrayMeta[[2]] %>%
-  mutate(sp = apply(spArray[,,4,3], 2, sum)) %>%
+summary(com1$sp)
+        
+summary(apply(predArray[,,1,1,1],2, sum, na.rm = TRUE))
+
+pres <- as.data.frame(predArray[,,1,1,1])
+
+com2 <- gridsf %>%
+  mutate(sp = apply(spArray[,,4,3], 2, sum, na.rm = TRUE)) %>%
   dplyr::select(sp) %>%
-  st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
-summary(apply(spArray[,,4,3], 2, sum))
+  st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
+summary(apply(spArray[,,4,3], 2, sum, na.rm = TRUE))
 
-load(glue::glue("{path}/distconsArray.rda")) #array
+#unconstrained
+spArray <- predArray[,,,,1]
 
-com3 <- spArrayMeta[[2]] %>%
-  mutate(sp = apply(spArray[,,4,3], 2, sum)) %>%
+com3 <- gridsf %>%
+  mutate(sp = apply(spArray[,,4,3], 2, sum, na.rm = TRUE)) %>%
   dplyr::select(sp) %>%
-  st_rasterize(., st_as_stars(st_bbox(spArrayMeta[[2]]), dx = 25050, dy = 25050, values = NA_real_))
-summary(apply(spArray[,,4,3], 2, sum))
+  st_rasterize(., st_as_stars(st_bbox(gridsf), dx = 25050, dy = 25050, values = NA_real_))
+summary(apply(spArray[,,4,3], 2, sum, na.rm = TRUE))
 
 summary(com1$sp)
 plot(com1)
@@ -76,6 +81,7 @@ p11 <- ggplot() +
     legend.position = "none"  # Remove the legend
   )
 
+print(p11)
 p2s1 <- ggplot() +
   geom_stars(data = com2, aes(fill = sp)) +  # Use fill for raster colors
   scale_fill_viridis_c(limits = c(0, 853), na.value = "transparent", name = "species") +
@@ -166,3 +172,53 @@ combined_plot_with_legend <- plot_grid(
 print(combined_plot_with_legend)
 ABC <- combined_plot_with_legend
 
+#### boxplot ####
+
+#data
+summary(apply(predArray[,,1,1,1],2, sum, na.rm = TRUE))
+sp1 <- apply(predArray[,,1,1,2],2, sum, na.rm = TRUE)
+sp2 <- apply(predArray[,,4,3,2],2, sum, na.rm = TRUE)
+sp3 <- apply(predArray[,,4,3,1],2, sum, na.rm = TRUE)
+
+spdata <- as.data.frame(cbind(sp1,sp2,sp3))
+spdata$cell <- 1:38657
+
+boxplot(data=spdata[,1:3], x=spdata$cell)
+
+str(spdata)
+
+library(ggplot2)
+library(tidyr)
+
+
+# Reshape the data from wide to long format
+spdata_long <- pivot_longer(spdata, cols = c(sp1, sp2, sp3), names_to = "sp", values_to = "value")
+
+
+spdata_long <- spdata_long %>%
+  mutate(sp = case_when(
+    sp == "sp1" ~ "2010",
+    sp == "sp2" ~ "2100, cons",
+    sp == "sp3" ~ "2100, uncons",
+    TRUE ~ as.character(sp)  # Keep the original value as a string if none of the above conditions match
+  ))
+
+# Create the boxplot
+dataplot <- ggplot(spdata_long, aes(x = sp, y = value, fill = sp)) +
+  geom_boxplot() +
+  labs(x = "year and scenario", y = "species", title = "D) richness", fill = "data") +
+  theme_minimal() +
+  scale_fill_manual(values = c("2010" = "#66B2FF", "2100, uncons" = "#66CC66", "2100, cons" = "#FF9999"))+
+  theme(      plot.title = element_text(size = 16, hjust = 0.5),
+           #axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 14),
+           axis.text.x = element_blank(),
+           axis.title.x = element_text(size = 14),
+           axis.text.y = element_text(size = 14),
+           axis.title.y = element_text(size = 14))
+
+
+print(dataplot)
+
+summary(spdata$sp1)
+summary(spdata$sp2)
+summary(spdata$sp3)
